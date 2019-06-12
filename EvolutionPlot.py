@@ -11,12 +11,12 @@ SAVE_PLOTS = False
 plot_dir = "../../plots/HaloFeedback/"
 
 #Only affect particles below the orbital speed?
-SPEED_CUT = False
+SPEED_CUT = True
 
 
 
 # Initialise distribution function
-DF = HaloFeedback.DistributionFunction()
+DF = HaloFeedback.DistributionFunction(Lambda = np.exp(3.0))
 
 #Radius position and velocity of the orbiting body
 r0 = 1.084e-8
@@ -85,7 +85,7 @@ for i in range(N_step):
 plt.xlim(1e6, np.max(DF.eps_grid))
 plt.ylim(1e0, 1e9)
 
-plt.xlabel(r'$\mathcal{E} = \Psi(r) - \frac{1}{2}v^2$ [km/s]')
+plt.xlabel(r'$\mathcal{E} = \Psi(r) - \frac{1}{2}v^2$ [(km/s)$^2$]')
 plt.ylabel(r'$f(\mathcal{E})$ [$M_\odot$ pc$^{-3}$ (km/s)$^{-3}$]')
 
 for n in [0, N_orb/4, N_orb/2, 3*N_orb/4, N_orb]:
@@ -100,7 +100,7 @@ if (SAVE_PLOTS):
 #Final energy of the halo
 E1 = np.trapz(-DF.P_eps()*DF.eps_grid, DF.eps_grid)
 
-dE_DF = (1/3.0857e+13)*(N_step*dt)*4*np.pi*G_N**2*1**2*DF.rho_init(r0)*np.log(HaloFeedback.Lambda)/v0
+dE_DF = (1/3.0857e+13)*(N_step*dt)*4*np.pi*G_N**2*1**2*DF.rho_init(r0)*np.log(DF.Lambda)/v0
 #print("    Analytic energy gain due to DF:", dE_DF)
 #print("    Measured energy gain due to DF:", E1 - E0)
 #print("    Fractional error:", -(E1 - E0)/dE_DF)
@@ -144,6 +144,9 @@ plt.axvline(r0, linestyle='--', color='black')
 for n in [0, N_orb/4, N_orb/2, 3*N_orb/4, N_orb]:
     plt.plot([0,0], [-1, -1], '-', color=cmap(n/N_orb), label = str(int(n)) + ' orbits')
 plt.legend(loc='lower right')
+
+plt.axvline(G_N*DF.M_BH/(G_N*DF.M_BH/r0 + v0**2), linestyle='--', color='k')
+plt.axvline(G_N*DF.M_BH/(G_N*DF.M_BH/r0 - 0.5*v0**2), linestyle='--', color='k')
 
 plt.xlabel(r'$r$ [pc]')
 if (SPEED_CUT):

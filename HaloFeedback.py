@@ -12,7 +12,7 @@ G_N = 4.302e-3 #(km/s)^2 pc/M_sun
 c = 2.99792458e5 #km/s
 
 #Coulomb factor
-Lambda = np.exp(3.0)
+#Lambda = np.exp(3.0)
 
 
 
@@ -29,11 +29,16 @@ n_kick = 3      #Provide 'kicks' to the particles at n_kicks different energies
 
 
 class DistributionFunction():
-    def __init__(self, M_BH=1e3, M_NS = 1.0, gamma=7./3., rho_sp=226):
+    def __init__(self, M_BH=1e3, M_NS = 1.0, gamma=7./3., rho_sp=226, Lambda=-1):
         self.M_BH = M_BH    #Solar mass
         self.M_NS = M_NS    #Solar mass
         self.gamma = gamma  #Slope of DM density profile
         self.rho_sp = rho_sp    #Solar mass/pc^3
+        
+        if (Lambda <= 0):
+            self.Lambda = np.sqrt(M_BH/M_NS)
+        else:
+            self.Lambda = Lambda
         
         #Spike radius and ISCO
         self.r_sp = ((3-gamma)*(0.2**(3.0-gamma))*M_BH/(2*np.pi*rho_sp))**(1.0/3.0) #pc
@@ -48,7 +53,7 @@ class DistributionFunction():
 
         #Define a string which specifies the model parameters
         #and numerical parameters (for use in file names etc.)
-        self.IDstr_num = "lnLambda=%.1f_n=%d"%(np.log(Lambda), n_kick)
+        self.IDstr_num = "lnLambda=%.1f_n=%d"%(np.log(self.Lambda), n_kick)
         self.IDstr_model = "gamma=%.2f_rhosp=.%1f"%(gamma, rho_sp)
         
     
@@ -106,8 +111,9 @@ class DistributionFunction():
         T_orb = 2*np.pi*r0*pc_to_km/v_orb
         
         #Calculate impact parameters
-        b_min = G_N*self.M_NS/(v_orb**2)
-        b_max = b_min*Lambda
+        b0 = G_N*self.M_NS/(v_orb**2)
+        b_max = b0*self.Lambda
+
         
         r_eps = G_N*self.M_BH/self.eps_grid
         
@@ -126,8 +132,8 @@ class DistributionFunction():
         
         T_orb = 2*np.pi*r0*pc_to_km/v_orb
         
-        b_min = G_N*self.M_NS/(v_orb**2)
-        b_max = b_min*Lambda
+        b0 = G_N*self.M_NS/(v_orb**2)
+        b_max = b0*self.Lambda
         
         df = np.zeros(N_grid)
         
@@ -162,15 +168,15 @@ class DistributionFunction():
         bins (and the corresponding fraction of particles which
         scatter with that delta_eps).
         """
-        eps_min = 2*v**2/(1+Lambda**2)
+        eps_min = 2*v**2/(1+self.Lambda**2)
         eps_max = 2*v**2
         
         eps_edges = np.linspace(eps_min, eps_max, n_kick+1)
         
         def F_norm(eps):
-            return -2*v**2/(eps*Lambda**2)
+            return -2*v**2/(eps*self.Lambda**2)
         def F_avg(eps):
-            return -2*v**2*np.log(eps)/Lambda**2
+            return -2*v**2*np.log(eps)/self.Lambda**2
             
         frac = np.diff(F_norm(eps_edges))
         eps_avg = np.diff(F_avg(eps_edges))/frac
@@ -180,3 +186,14 @@ class DistributionFunction():
     def P_eps(self):
         """Calculate the PDF d{P}/d{eps}"""
         return np.sqrt(2)*np.pi**3*(G_N*self.M_BH)**3*self.f_eps/self.eps_grid**2.5
+        
+    def dEdt_DF(self, r):
+        """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun"""
+        v_orb = np.sqrt(self.psi(r))
+        return (1/pc_to_km)*4*np.pi*G_N**2*self.M_NS**2*self.rho(r, v_cut=v_orb)*np.log(self.Lambda)/v_orb
+
+    def E_orb(self,r):
+        return -0.5*G_N*(self.M_BH + self.M_NS)/r
+        
+    def T_orb(self,r):
+        return 2*np.pi*np.sqrt(pc_to_km**2*r**3/(G_N*(self.M_BH + self.M_NS)))
