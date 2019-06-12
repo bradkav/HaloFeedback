@@ -11,7 +11,7 @@ SAVE_PLOTS = False
 plot_dir = "../../plots/HaloFeedback/"
 
 #Only affect particles below the orbital speed?
-SPEED_CUT = True
+SPEED_CUT = False
 
 
 
@@ -145,8 +145,8 @@ for n in [0, N_orb/4, N_orb/2, 3*N_orb/4, N_orb]:
     plt.plot([0,0], [-1, -1], '-', color=cmap(n/N_orb), label = str(int(n)) + ' orbits')
 plt.legend(loc='lower right')
 
-plt.axvline(G_N*DF.M_BH/(G_N*DF.M_BH/r0 + v0**2), linestyle='--', color='k')
-plt.axvline(G_N*DF.M_BH/(G_N*DF.M_BH/r0 - 0.5*v0**2), linestyle='--', color='k')
+#plt.axvline(G_N*DF.M_BH/(G_N*DF.M_BH/r0 + v0**2), linestyle='--', color='k')
+#plt.axvline(G_N*DF.M_BH/(G_N*DF.M_BH/r0 - 0.5*v0**2), linestyle='--', color='k')
 
 plt.xlabel(r'$r$ [pc]')
 if (SPEED_CUT):

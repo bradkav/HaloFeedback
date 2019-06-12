@@ -22,7 +22,7 @@ pc_to_km = 3.0857e13
 
 #Numerical parameters
 N_grid = 10000  #Number of grid points in the specific energy
-n_kick = 3      #Provide 'kicks' to the particles at n_kicks different energies
+n_kick = 25      #Provide 'kicks' to the particles at n_kicks different energies
                 #results appear to be pretty insensitive to varying this.
 
 #------------------
@@ -125,6 +125,7 @@ class DistributionFunction():
         return df/T_orb
         
         
+        
     def dfdt_plus(self, r0, v_orb, v_cut=-1):
         """Particles to add back into distribution function."""
         if (v_cut < 0):
@@ -139,7 +140,27 @@ class DistributionFunction():
         
         #Calculate average change in energy per scatter
         # (perhaps divided into multiple 'kicks' with weights 'frac_list')
-        delta_eps_list, frac_list = self.calc_delta_eps(v_orb)
+        #delta_eps_list, frac_list = self.calc_delta_eps(v_orb)
+        
+        eps_min = 2*v_orb**2/(1+self.Lambda**2)
+        eps_max = 2*v_orb**2
+        
+        delta_eps_list = np.geomspace(-eps_max, -eps_min, n_kick + 1)
+        
+        #Step size for trapezoidal integration
+        step = delta_eps_list[1:] - delta_eps_list[:-1]
+        step = np.append(step, 0)
+        step = np.append(0, step)
+        #step = delta_eps_list[1] - delta_eps_list[0]
+        #step = x_list[0] - x_list[1]
+        #print("Proper trapz:", np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list))
+        
+        #Make sure that the integral is normalised correctly
+        renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+        
+        #Calculate weights for each term
+        frac_list = 0.5*(step[:-1] + step[1:])/renorm
+        
         
         # Sum over the kicks
         for delta_eps, frac in zip(delta_eps_list, frac_list):
@@ -156,10 +177,19 @@ class DistributionFunction():
             
     
             r_eps = G_N*self.M_BH/eps_old[mask]
-        
-            df[mask] += frac*(f_old*8*b_max**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5
-
+            
+            #print(delta_eps, self.P_delta_eps(v_orb, delta_eps))
+            df[mask] += frac*self.P_delta_eps(v_orb, delta_eps)*(f_old*8*b_max**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5
+     
         return (df/T_orb)
+       
+       
+        
+    def P_delta_eps(self, v, delta_eps):
+        """
+        Calcuate PDF for delta_eps
+        """    
+        return 2*v**2/(self.Lambda**2*delta_eps**2)
         
         
     def calc_delta_eps(self, v):
@@ -197,3 +227,46 @@ class DistributionFunction():
         
     def T_orb(self,r):
         return 2*np.pi*np.sqrt(pc_to_km**2*r**3/(G_N*(self.M_BH + self.M_NS)))
+        
+        
+        
+#---------------------
+#----- DEPRECATED ----
+#---------------------
+
+
+    def dfdt_plus_old(self, r0, v_orb, v_cut=-1):
+        """Particles to add back into distribution function."""
+        if (v_cut < 0):
+            v_cut = self.v_max(r0)
+        
+        T_orb = 2*np.pi*r0*pc_to_km/v_orb
+        
+        b0 = G_N*self.M_NS/(v_orb**2)
+        b_max = b0*self.Lambda
+        
+        df = np.zeros(N_grid)
+        
+        #Calculate average change in energy per scatter
+        # (perhaps divided into multiple 'kicks' with weights 'frac_list')
+        delta_eps_list, frac_list = self.calc_delta_eps(v_orb)
+        
+        # Sum over the kicks
+        for delta_eps, frac in zip(delta_eps_list, frac_list):
+            
+            #Value of specific energy before the kick
+            eps_old = self.eps_grid - delta_eps
+        
+            #Which particles can scatter?
+            mask = (eps_old  > self.psi(r0) - 0.5*v_cut**2) & (eps_old < self.psi(r0))
+        
+            # Distribution of particles before they scatter
+            f_old = np.interp(eps_old[mask][::-1], self.eps_grid[::-1],
+                                    self.f_eps[::-1], left=0, right=0)[::-1]
+            
+    
+            r_eps = G_N*self.M_BH/eps_old[mask]
+        
+            df[mask] += frac*(f_old*8*b_max**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5
+
+        return (df/T_orb)
