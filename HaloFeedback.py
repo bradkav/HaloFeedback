@@ -3,6 +3,8 @@ import numpy as np
 from scipy.special import gamma as Gamma_func
 from scipy.interpolate import interp1d
 
+from scipy.integrate import quad
+
 import matplotlib.pyplot as plt
 
 from time import time as timeit
@@ -22,7 +24,7 @@ pc_to_km = 3.0857e13
 
 #Numerical parameters
 N_grid = 10000  #Number of grid points in the specific energy
-n_kick = 25      #Provide 'kicks' to the particles at n_kicks different energies
+n_kick = 25    #Provide 'kicks' to the particles at n_kicks different energies
                 #results appear to be pretty insensitive to varying this.
 
 #------------------
@@ -61,6 +63,7 @@ class DistributionFunction():
         """Gravitational potential as a function of r"""
         return G_N*self.M_BH/r
         
+        
     def v_max(self, r):
         """Maximum velocity as a function of r"""
         return np.sqrt(2*self.psi(r))
@@ -82,6 +85,11 @@ class DistributionFunction():
         integ = vlist**2*flist
         return 4*np.pi*np.trapz(integ, vlist)
 
+    def TotalMass(self):
+        return np.trapz(-self.P_eps(), self.eps_grid)
+
+    def TotalEnergy(self):
+        return np.trapz(-self.P_eps()*self.eps_grid, self.eps_grid)
 
     def rho_init(self, r):
         """Initial DM density of the system"""
@@ -110,20 +118,30 @@ class DistributionFunction():
         
         T_orb = 2*np.pi*r0*pc_to_km/v_orb
         
-        #Calculate impact parameters
-        b0 = G_N*self.M_NS/(v_orb**2)
-        b_max = b0*self.Lambda
-
-        
+                
         r_eps = G_N*self.M_BH/self.eps_grid
         
         #Define which energies are allowed to scatter
         mask = (self.eps_grid > self.psi(r0) - 0.5*v_cut**2) & (self.eps_grid < self.psi(r0))
 
         df = np.zeros(N_grid)
-        df[mask] = -self.f_eps[mask]*8*b_max**2*r0*np.sqrt(1/r0 - 1/r_eps[mask])/r_eps[mask]**2.5
+        df[mask] = -self.f_eps[mask]*8*self.b_max(v_orb)**2*r0*np.sqrt(1/r0 - 1/r_eps[mask])/r_eps[mask]**2.5
         return df/T_orb
         
+    def b_90(self, v_orb):
+        return G_N*self.M_NS/(v_orb**2)
+        
+    def b_min(self, v_orb):
+        return 15./pc_to_km
+        
+    def b_max(self, v_orb):
+        return self.Lambda*np.sqrt(self.b_90(v_orb)**2 + self.b_min(v_orb)**2)
+        
+    def eps_min(self, v_orb):
+        return 2*v_orb**2/(1+ self.b_max(v_orb)**2/self.b_90(v_orb)**2)
+    
+    def eps_max(self, v_orb):
+        return 2*v_orb**2/(1 + self.b_min(v_orb)**2/self.b_90(v_orb)**2)
         
         
     def dfdt_plus(self, r0, v_orb, v_cut=-1):
@@ -133,18 +151,17 @@ class DistributionFunction():
         
         T_orb = 2*np.pi*r0*pc_to_km/v_orb
         
-        b0 = G_N*self.M_NS/(v_orb**2)
-        b_max = b0*self.Lambda
-        
         df = np.zeros(N_grid)
         
         #Calculate average change in energy per scatter
         # (perhaps divided into multiple 'kicks' with weights 'frac_list')
         #delta_eps_list, frac_list = self.calc_delta_eps(v_orb)
         
-        eps_min = 2*v_orb**2/(1+self.Lambda**2)
-        eps_max = 2*v_orb**2
-        
+        eps_min = self.eps_min(v_orb)
+        eps_max = self.eps_max(v_orb)
+       
+        #print(quad(lambda x: self.P_delta_eps( v_orb, x), eps_min, eps_max))
+       
         delta_eps_list = np.geomspace(-eps_max, -eps_min, n_kick + 1)
         
         #Step size for trapezoidal integration
@@ -158,13 +175,25 @@ class DistributionFunction():
         #Make sure that the integral is normalised correctly
         renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
         
+        print(renorm)
+        #print(step)
         #Calculate weights for each term
         frac_list = 0.5*(step[:-1] + step[1:])/renorm
+        #print('  ')
+        #print(0.5*(delta_eps_list[1] - delta_eps_list[0]), 0.5*(delta_eps_list[-1] - delta_eps_list[-2]), 0.5*(delta_eps_list[2] - delta_eps_list[0]))
+        #print(frac_list[0], frac_list[-1], frac_list[1])
         
+        print("WHEN I JUST GIVE EVERY PARTICLE THE AVERAGE KICK, THEN ENERGY IS CONSERVED!")
+        
+        delta_eps_avg = 2*v_orb**2*np.log(1 + self.Lambda**2)/self.Lambda**2
+        delta_eps_list = (-delta_eps_avg, )
+        frac_list = (1, )
         
         # Sum over the kicks
         for delta_eps, frac in zip(delta_eps_list, frac_list):
             
+            #b = self.b_90(v_orb)*np.sqrt(2*v_orb**2/delta_eps**2 + 1)
+            #print(b)
             #Value of specific energy before the kick
             eps_old = self.eps_grid - delta_eps
         
@@ -178,49 +207,38 @@ class DistributionFunction():
     
             r_eps = G_N*self.M_BH/eps_old[mask]
             
-            #print(delta_eps, self.P_delta_eps(v_orb, delta_eps))
-            df[mask] += frac*self.P_delta_eps(v_orb, delta_eps)*(f_old*8*b_max**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5
-     
+            #r_eps_new  = G_N*self.M_BH/self.eps_grid[mask]
+            
+            #print(delta_eps, self.P_delta_eps(v_orb, delta_eps)) #
+            #self.P_delta_eps(v_orb, delta_eps)*
+            df[mask] += frac*(f_old*8*self.b_max(v_orb)**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5
+ 
         return (df/T_orb)
        
        
-        
+    
     def P_delta_eps(self, v, delta_eps):
         """
         Calcuate PDF for delta_eps
-        """    
+        """  
+    
         return 2*v**2/(self.Lambda**2*delta_eps**2)
         
-        
-    def calc_delta_eps(self, v):
-        """
-        Calculate average delta_eps integrated over different
-        bins (and the corresponding fraction of particles which
-        scatter with that delta_eps).
-        """
-        eps_min = 2*v**2/(1+self.Lambda**2)
-        eps_max = 2*v**2
-        
-        eps_edges = np.linspace(eps_min, eps_max, n_kick+1)
-        
-        def F_norm(eps):
-            return -2*v**2/(eps*self.Lambda**2)
-        def F_avg(eps):
-            return -2*v**2*np.log(eps)/self.Lambda**2
-            
-        frac = np.diff(F_norm(eps_edges))
-        eps_avg = np.diff(F_avg(eps_edges))/frac
-        
-        return eps_avg, frac
         
     def P_eps(self):
         """Calculate the PDF d{P}/d{eps}"""
         return np.sqrt(2)*np.pi**3*(G_N*self.M_BH)**3*self.f_eps/self.eps_grid**2.5
         
-    def dEdt_DF(self, r):
+    def dEdt_DF(self, r, SPEED_CUT = False):
         """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun"""
         v_orb = np.sqrt(self.psi(r))
-        return (1/pc_to_km)*4*np.pi*G_N**2*self.M_NS**2*self.rho(r, v_cut=v_orb)*np.log(self.Lambda)/v_orb
+        
+        if (SPEED_CUT):
+            v_cut = v_orb
+        else:
+            v_cut = -1
+            
+        return (1/pc_to_km)*4*np.pi*G_N**2*self.M_NS**2*self.rho(r, v_cut)*np.log(self.Lambda)/v_orb
 
     def E_orb(self,r):
         return -0.5*G_N*(self.M_BH + self.M_NS)/r
@@ -264,7 +282,7 @@ class DistributionFunction():
             f_old = np.interp(eps_old[mask][::-1], self.eps_grid[::-1],
                                     self.f_eps[::-1], left=0, right=0)[::-1]
             
-    
+            
             r_eps = G_N*self.M_BH/eps_old[mask]
         
             df[mask] += frac*(f_old*8*b_max**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5

@@ -32,24 +32,29 @@ if (SPEED_CUT):
 T_orb = 2*np.pi*r0*3.0857e13/v0
 
 #Number of orbits to evolve
-N_orb = 24000
-orbits_per_step = 100
+N_orb = 10
+orbits_per_step = 1
 N_step = int(N_orb/orbits_per_step)
 dt = T_orb*orbits_per_step
 
 #Number of radial points to calculate the density at
-N_r = 200
+N_r = 1000
 
 print("    Number of orbits:", N_orb)
 print("    Time [days]:", N_step*dt/(3600*24))
 
 #Initial energy of the halo
-E0 = np.trapz(-DF.P_eps()*DF.eps_grid, DF.eps_grid)
+E0 = DF.TotalEnergy()
+print(DF.TotalMass())
 
 #Radial grid for calculating the density
-r_list = np.geomspace(DF.r_isco, 100*r0, N_r-1)
+#r_list = np.geomspace(DF.r_isco, 1e7*r0, N_r-1)
+r_list = np.geomspace(DF.r_isco, 1e7*r0, N_r-1)
 r_list =  np.sort(np.append(r_list, r0))
 rho_list = np.zeros((N_step, N_r))
+
+M_list = np.zeros(N_step)
+
 
 #Initial density
 if (SPEED_CUT):
@@ -58,9 +63,22 @@ if (SPEED_CUT):
 else:
     rho0 = np.array([DF.rho(r) for r in r_list])
 
+rho0_full = np.array([DF.rho(r) for r in r_list])
+E0_alt = 0.5*4*np.pi*np.trapz(rho0_full*r_list**2*DF.psi(r_list), r_list)
 
 
+print("    ")
+print("    Initial energy of the halo [(km/s)^2]:", E0)
+print("    Initial energy of the halo, alternative [(km/s)^2]:", E0_alt)
+#print(E0/E0_alt)
+print("    ")
+
+M0 = DF.TotalMass()
+M0_alt = 4*np.pi*np.trapz(rho0*r_list**2, r_list)
+print("    Initial mass of the halo [M_sun]:", M0_alt)
 #----------- Evolving the system and plotting f(eps) ----------
+
+#M_list[0] = M0
 
 plt.figure()
 cmap = matplotlib.cm.get_cmap('Spectral')
@@ -76,6 +94,7 @@ for i in range(N_step):
     else:
         rho_list[i,:]= np.array([DF.rho(r) for r in r_list])
     
+    M_list[i] = DF.TotalMass()
     #Time-step using the improved Euler method
     df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
     DF.f_eps += df_dt_1*dt
@@ -94,18 +113,6 @@ plt.legend(loc='best')
 
 if (SAVE_PLOTS):
     plt.savefig(plot_dir + "f_eps_" + file_label + DF.IDstr_num + ".pdf", bbox_inches='tight')
-
-#---------------- Diagnostics -------------------------
-
-#Final energy of the halo
-E1 = np.trapz(-DF.P_eps()*DF.eps_grid, DF.eps_grid)
-
-dE_DF = (1/3.0857e+13)*(N_step*dt)*4*np.pi*G_N**2*1**2*DF.rho_init(r0)*np.log(DF.Lambda)/v0
-#print("    Analytic energy gain due to DF:", dE_DF)
-#print("    Measured energy gain due to DF:", E1 - E0)
-#print("    Fractional error:", -(E1 - E0)/dE_DF)
-#print("    Total Halo 'Mass' [final]:", np.trapz(-DF.P_eps(), DF.eps_grid))
-
 
 #------------------------- Density -------------------------
 
@@ -158,6 +165,24 @@ plt.ylim(0, 2.0)
 
 if (SAVE_PLOTS):
     plt.savefig(plot_dir + "Density_ratio_" + file_label + DF.IDstr_num + ".pdf", bbox_inches='tight')
+
+
+#---------------- Diagnostics -------------------------
+
+
+rho_full = np.array([DF.rho(r) for r in r_list])
+Ef_alt = 0.5*4*np.pi*np.trapz(r_list**2*rho_full*DF.psi(r_list), r_list)
+
+print("  ")
+print("   Fractional Change in halo mass:", (DF.TotalMass() - M0)/M0)
+print("   Change in halo energy (1):", DF.TotalEnergy() - E0)
+print("   Change in halo energy (2):", Ef_alt - E0_alt)
+
+print("  ")
+print("   Dynamical friction energy change:", DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)
+print(1+(DF.TotalEnergy() - E0)/(DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt))
+
+
 
 plt.show()
 
