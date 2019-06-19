@@ -7,16 +7,16 @@ from HaloFeedback import G_N
 import matplotlib
 
 #Save the plots to file?
-SAVE_PLOTS = False
+SAVE_PLOTS = FALSE
 plot_dir = "../../plots/HaloFeedback/"
 
 #Only affect particles below the orbital speed?
-SPEED_CUT = False
+SPEED_CUT = FALSE
 
 
 
 # Initialise distribution function
-DF = HaloFeedback.DistributionFunction(Lambda = np.exp(3.0))
+DF = HaloFeedback.DistributionFunction(Lambda = np.exp(3.0), M_BH = 1000)
 
 #Radius position and velocity of the orbiting body
 r0 = 1.084e-8
@@ -32,13 +32,13 @@ if (SPEED_CUT):
 T_orb = 2*np.pi*r0*3.0857e13/v0
 
 #Number of orbits to evolve
-N_orb = 10
-orbits_per_step = 1
+N_orb = 24000
+orbits_per_step = 100
 N_step = int(N_orb/orbits_per_step)
 dt = T_orb*orbits_per_step
 
 #Number of radial points to calculate the density at
-N_r = 1000
+N_r = 200
 
 print("    Number of orbits:", N_orb)
 print("    Time [days]:", N_step*dt/(3600*24))
@@ -49,7 +49,7 @@ print(DF.TotalMass())
 
 #Radial grid for calculating the density
 #r_list = np.geomspace(DF.r_isco, 1e7*r0, N_r-1)
-r_list = np.geomspace(DF.r_isco, 1e7*r0, N_r-1)
+r_list = np.geomspace(DF.r_isco, 1e3*r0, N_r-1)
 r_list =  np.sort(np.append(r_list, r0))
 rho_list = np.zeros((N_step, N_r))
 
@@ -179,9 +179,7 @@ print("   Change in halo energy (1):", DF.TotalEnergy() - E0)
 print("   Change in halo energy (2):", Ef_alt - E0_alt)
 
 print("  ")
-print("   Dynamical friction energy change:", DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)
-print(1+(DF.TotalEnergy() - E0)/(DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt))
-
+print("   Dynamical friction energy change (linear...):", DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)
 
 
 plt.show()
