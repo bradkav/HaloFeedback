@@ -24,7 +24,7 @@ pc_to_km = 3.0857e13
 
 #Numerical parameters
 N_grid = 10000  #Number of grid points in the specific energy
-n_kick = 1      #Provide 'kicks' to the particles at n_kicks different energies
+n_kick = 10      #Provide 'kicks' to the particles at n_kicks different energies
                 #results appear to be pretty insensitive to varying this.
 # DO NOT CHANGE N_KICK FOR NOW!
 
@@ -108,7 +108,7 @@ class DistributionFunction():
         """
         
         #I have reverted this to the 'old' method of a single kick
-        return self.dfdt_minus_old(r0, v_orb, v_cut) + self.dfdt_plus_old(r0, v_orb, v_cut)
+        return self.dfdt_minus_old(r0, v_orb, v_cut) + self.dfdt_plus(r0, v_orb, v_cut)
     
     
     def dfdt_minus(self, r0, v_orb, v_cut=-1):
@@ -205,7 +205,7 @@ class DistributionFunction():
             eps_old = self.eps_grid - delta_eps
         
             #Which particles can scatter?
-            mask = (eps_old  > self.psi(r0 + self.b_max(v_orb)) - 0.5*v_cut**2) & (eps_old < self.psi(r0 - self.b_max(v_orb)))
+            mask = (eps_old  > self.psi(r0) - 0.5*v_cut**2) & (eps_old < self.psi(r0))
         
             # Distribution of particles before they scatter
             f_old = np.interp(eps_old[mask][::-1], self.eps_grid[::-1],
@@ -217,7 +217,8 @@ class DistributionFunction():
             #r_eps_new  = G_N*self.M_BH/self.eps_grid[mask]
             
             #print(delta_eps, self.P_delta_eps(v_orb, delta_eps)) #
-            #
+            
+            
             df[mask] += frac*self.P_delta_eps(v_orb, delta_eps)*(f_old*8*self.b_max(v_orb)**2*r0*np.sqrt(1/r0 - 1/r_eps)/r_eps**2.5)*(self.eps_grid[mask]/eps_old[mask])**2.5
  
         return (df/T_orb)
@@ -293,8 +294,8 @@ class DistributionFunction():
         """Particles to subtract from distribution function"""
         #print("Do I have to change b_max for the three cases?")
         
-        print("b_max [pc]:", self.b_max(v_orb))
-        print("b_90 [pc]:", self.b_90(v_orb))
+        #print("b_max [pc]:", self.b_max(v_orb))
+        #print("b_90 [pc]:", self.b_90(v_orb))
         
         if (v_cut < 0):
             v_cut = self.v_max(r0)

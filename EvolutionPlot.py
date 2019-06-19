@@ -7,11 +7,11 @@ from HaloFeedback import G_N
 import matplotlib
 
 #Save the plots to file?
-SAVE_PLOTS = FALSE
+SAVE_PLOTS = False
 plot_dir = "../../plots/HaloFeedback/"
 
 #Only affect particles below the orbital speed?
-SPEED_CUT = FALSE
+SPEED_CUT = False
 
 
 
