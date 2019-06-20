@@ -11,9 +11,11 @@ SAVE_PLOTS = False
 plot_dir = "../../plots/HaloFeedback/"
 
 #Only affect particles below the orbital speed?
-SPEED_CUT = False
+SPEED_CUT = True
 
-
+#Set 'AVERAGE' = True to give all particles the same kick
+#For now, this is the only method that conserves energy...
+AVERAGE = True
 
 # Initialise distribution function
 DF = HaloFeedback.DistributionFunction(Lambda = np.exp(3.0), M_BH = 1000)
@@ -45,7 +47,7 @@ print("    Time [days]:", N_step*dt/(3600*24))
 
 #Initial energy of the halo
 E0 = DF.TotalEnergy()
-print(DF.TotalMass())
+#print(DF.TotalMass())
 
 #Radial grid for calculating the density
 #r_list = np.geomspace(DF.r_isco, 1e7*r0, N_r-1)
@@ -96,9 +98,9 @@ for i in range(N_step):
     
     M_list[i] = DF.TotalMass()
     #Time-step using the improved Euler method
-    df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
+    df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, average=AVERAGE)
     DF.f_eps += df_dt_1*dt
-    df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
+    df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, average=AVERAGE)
     DF.f_eps += 0.5*dt*(df_dt_2 - df_dt_1)
 
 plt.xlim(1e6, np.max(DF.eps_grid))
@@ -180,7 +182,7 @@ print("   Change in halo energy (2):", Ef_alt - E0_alt)
 
 print("  ")
 print("   Dynamical friction energy change (linear...):", DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)
-
+print("   Fractional error in DF:", ((DF.TotalEnergy() - E0) + DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)/(DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt))
 
 plt.show()
 
