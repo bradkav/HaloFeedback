@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from scipy.integrate import cumtrapz
+
 import HaloFeedback
 from HaloFeedback import G_N
 
@@ -13,9 +15,9 @@ plot_dir = "../../plots/HaloFeedback/"
 #Only affect particles below the orbital speed?
 SPEED_CUT = True
 
-#Set 'AVERAGE' = True to give all particles the same kick
-#For now, this is the only method that conserves energy...
-AVERAGE = True
+#Specify which method to use for the calculations
+# METHOD = 1 is simpler, but METHOD = 2 should be more accurate
+METHOD = 2
 
 # Initialise distribution function
 DF = HaloFeedback.DistributionFunction(Lambda = np.exp(3.0), M_BH = 1000)
@@ -28,7 +30,7 @@ v_cut = -1
 file_label = ""
 if (SPEED_CUT):
     v_cut = v0
-    file_label="speedcut_"
+    file_label="speedcut_Method" + str(METHOD) + "_"
 
 #Orbital time in seconds
 T_orb = 2*np.pi*r0*3.0857e13/v0
@@ -37,7 +39,10 @@ T_orb = 2*np.pi*r0*3.0857e13/v0
 N_orb = 24000
 orbits_per_step = 100
 N_step = int(N_orb/orbits_per_step)
+
 dt = T_orb*orbits_per_step
+
+t_list = np.zeros(N_step + 1)
 
 #Number of radial points to calculate the density at
 N_r = 200
@@ -53,10 +58,15 @@ E0 = DF.TotalEnergy()
 #r_list = np.geomspace(DF.r_isco, 1e7*r0, N_r-1)
 r_list = np.geomspace(DF.r_isco, 1e3*r0, N_r-1)
 r_list =  np.sort(np.append(r_list, r0))
-rho_list = np.zeros((N_step, N_r))
+rho_list = np.zeros((N_step+1, N_r))
+
+#Which index refers to r0?
+r0_ind = np.where(r_list == r0)[0][0]
 
 M_list = np.zeros(N_step)
 
+#Calculate initial DF energy loss rate
+DF_init = DF.dEdt_DF(r0, SPEED_CUT)
 
 #Initial density
 if (SPEED_CUT):
@@ -64,6 +74,8 @@ if (SPEED_CUT):
     rho0 = np.array([DF.rho(r, v_cut = np.sqrt(G_N*DF.M_BH/r)) for r in r_list])
 else:
     rho0 = np.array([DF.rho(r) for r in r_list])
+
+rho_list[0,:] = rho0
 
 rho0_full = np.array([DF.rho(r) for r in r_list])
 E0_alt = 0.5*4*np.pi*np.trapz(rho0_full*r_list**2*DF.psi(r_list), r_list)
@@ -78,6 +90,10 @@ print("    ")
 M0 = DF.TotalMass()
 M0_alt = 4*np.pi*np.trapz(rho0*r_list**2, r_list)
 print("    Initial mass of the halo [M_sun]:", M0_alt)
+
+delta_eps = np.zeros(N_step + 1)
+delta_eps[0] = 0
+
 #----------- Evolving the system and plotting f(eps) ----------
 
 #M_list[0] = M0
@@ -92,19 +108,26 @@ for i in range(N_step):
     
     #Calculate the density profile
     if (SPEED_CUT):
-        rho_list[i,:] = np.array([DF.rho(r, v_cut = np.sqrt(G_N*DF.M_BH/r)) for r in r_list])
+        rho_list[i+1,:] = np.array([DF.rho(r, v_cut = np.sqrt(G_N*DF.M_BH/r)) for r in r_list])
     else:
-        rho_list[i,:]= np.array([DF.rho(r) for r in r_list])
+        rho_list[i+1,:]= np.array([DF.rho(r) for r in r_list])
     
     M_list[i] = DF.TotalMass()
     #Time-step using the improved Euler method
-    df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, average=AVERAGE)
+    df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, method=METHOD)
     DF.f_eps += df_dt_1*dt
-    df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, average=AVERAGE)
+    df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, method=METHOD)
     DF.f_eps += 0.5*dt*(df_dt_2 - df_dt_1)
+    
+    delta_eps[i+1] = DF.TotalEnergy() - E0
+    t_list[i+1] = t_list[i] + dt
 
-plt.xlim(1e6, np.max(DF.eps_grid))
-plt.ylim(1e0, 1e9)
+#plt.xlim(1e6, np.max(DF.eps_grid))
+plt.xlim(1.5e8, 4.5e8)
+#plt.ylim(1e0, 1e9)
+plt.ylim(1e2, 1e8)
+
+plt.axvline(G_N*DF.M_BH/r0, linestyle='--', color='k')
 
 plt.xlabel(r'$\mathcal{E} = \Psi(r) - \frac{1}{2}v^2$ [(km/s)$^2$]')
 plt.ylabel(r'$f(\mathcal{E})$ [$M_\odot$ pc$^{-3}$ (km/s)$^{-3}$]')
@@ -171,18 +194,20 @@ if (SAVE_PLOTS):
 
 #---------------- Diagnostics -------------------------
 
+# Changing density over time
+Delta_rho_dt = cumtrapz(rho_list[:,r0_ind], t_list, initial=0)/rho_list[0,r0_ind]
 
 rho_full = np.array([DF.rho(r) for r in r_list])
 Ef_alt = 0.5*4*np.pi*np.trapz(r_list**2*rho_full*DF.psi(r_list), r_list)
 
 print("  ")
 print("   Fractional Change in halo mass:", (DF.TotalMass() - M0)/M0)
-print("   Change in halo energy (1):", DF.TotalEnergy() - E0)
-print("   Change in halo energy (2):", Ef_alt - E0_alt)
+print("   Change in halo energy [(km/s)^2]:", DF.TotalEnergy() - E0)
+#print("   Change in halo energy (2):", Ef_alt - E0_alt)
 
 print("  ")
-print("   Dynamical friction energy change (linear...):", DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)
-print("   Fractional error in DF:", ((DF.TotalEnergy() - E0) + DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt)/(DF.dEdt_DF(r0, SPEED_CUT)*N_step*dt))
+print("   Dynamical friction energy change [(km/s)^2]:", DF_init*Delta_rho_dt[-1])
+print("   Fractional error in DF:", ((DF.TotalEnergy() - E0) + DF_init*Delta_rho_dt[-1])/(DF_init*Delta_rho_dt[-1]))
 
 plt.show()
 
