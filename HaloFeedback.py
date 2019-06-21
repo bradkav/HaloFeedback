@@ -119,7 +119,7 @@ class DistributionFunction():
     
     
     
-    def dfdt(self, r0, v_orb, v_cut=-1, method = 1, n_kick = 1):
+    def dfdt(self, r0, v_orb, v_cut=-1, method = 2, n_kick = 1):
         """Time derivative of the distribution function f(eps).
         
         Parameters:
