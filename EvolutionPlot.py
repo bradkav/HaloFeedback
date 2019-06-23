@@ -59,14 +59,17 @@ E0 = DF.TotalEnergy()
 r_list = np.geomspace(DF.r_isco, 1e3*r0, N_r-1)
 r_list =  np.sort(np.append(r_list, r0))
 rho_list = np.zeros((N_step+1, N_r))
+rho_avg_list = np.zeros(N_step+1)
 
 #Which index refers to r0?
 r0_ind = np.where(r_list == r0)[0][0]
 
 M_list = np.zeros(N_step)
 
+DF_list = np.zeros(N_step+1)
+
 #Calculate initial DF energy loss rate
-DF_init = DF.dEdt_DF(r0, SPEED_CUT)
+DF_list[0] = DF.dEdt_DF(r0, SPEED_CUT)
 
 #Initial density
 if (SPEED_CUT):
@@ -76,6 +79,8 @@ else:
     rho0 = np.array([DF.rho(r) for r in r_list])
 
 rho_list[0,:] = rho0
+rho_avg_list[0] = ((r0 - DF.b_max(v0))*DF.rho(r0 - DF.b_max(v0)) + (r0 + DF.b_max(v0))*DF.rho(r0 + DF.b_max(v0)) )/(2*r0)
+
 
 rho0_full = np.array([DF.rho(r) for r in r_list])
 E0_alt = 0.5*4*np.pi*np.trapz(rho0_full*r_list**2*DF.psi(r_list), r_list)
@@ -88,7 +93,7 @@ print("    Initial energy of the halo, alternative [(km/s)^2]:", E0_alt)
 print("    ")
 
 M0 = DF.TotalMass()
-M0_alt = 4*np.pi*np.trapz(rho0*r_list**2, r_list)
+M0_alt = 4*np.pi*np.trapz(rho0_full*r_list**2, r_list)
 print("    Initial mass of the halo [M_sun]:", M0_alt)
 
 delta_eps = np.zeros(N_step + 1)
@@ -112,6 +117,7 @@ for i in range(N_step):
     else:
         rho_list[i+1,:]= np.array([DF.rho(r) for r in r_list])
     
+    
     M_list[i] = DF.TotalMass()
     #Time-step using the improved Euler method
     df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, method=METHOD)
@@ -121,6 +127,9 @@ for i in range(N_step):
     
     delta_eps[i+1] = DF.TotalEnergy() - E0
     t_list[i+1] = t_list[i] + dt
+    rho_avg_list[i+1] = ((r0 - DF.b_max(v0))*DF.rho(r0 - DF.b_max(v0)) + (r0 + DF.b_max(v0))*DF.rho(r0 + DF.b_max(v0)) )/(2*r0)
+    DF_list[i+1] = DF.dEdt_DF(r0, SPEED_CUT)
+
 
 #plt.xlim(1e6, np.max(DF.eps_grid))
 plt.xlim(1.5e8, 4.5e8)
@@ -147,6 +156,8 @@ plt.figure()
 for i in range(N_step):
     plt.loglog(r_list,rho_list[i,:], alpha=0.5, color=cmap(i/N_step))
 plt.axvline(r0, linestyle='--', color='black')
+plt.axvline(r0 + DF.b_max(v0), linestyle=':', color='black')
+plt.axvline(r0 - DF.b_max(v0), linestyle=':', color='black')
 
 for n in [0, N_orb/4, N_orb/2, 3*N_orb/4, N_orb]:
     plt.plot([0,0], [-1, -1], '-', color=cmap(n/N_orb), label = str(int(n)) + ' orbits')
@@ -171,6 +182,8 @@ plt.figure()
 for i in range(N_step):
     plt.semilogx(r_list,rho_list[i,:]/rho0, alpha=0.5, color=cmap(i/N_step))
 plt.axvline(r0, linestyle='--', color='black')
+plt.axvline(r0 + DF.b_max(v0), linestyle=':', color='black')
+plt.axvline(r0 - DF.b_max(v0), linestyle=':', color='black')
 
 
 for n in [0, N_orb/4, N_orb/2, 3*N_orb/4, N_orb]:
@@ -195,10 +208,15 @@ if (SAVE_PLOTS):
 #---------------- Diagnostics -------------------------
 
 # Changing density over time
-Delta_rho_dt = cumtrapz(rho_list[:,r0_ind], t_list, initial=0)/rho_list[0,r0_ind]
+#Delta_rho_dt = cumtrapz(rho_avg_list, t_list, initial=0)/rho_avg_list[0]
+
+DeltaE = cumtrapz(DF_list, t_list, initial=0)
+
 
 rho_full = np.array([DF.rho(r) for r in r_list])
 Ef_alt = 0.5*4*np.pi*np.trapz(r_list**2*rho_full*DF.psi(r_list), r_list)
+
+#print(DF.rho(r0), rho_avg_list[-1])
 
 print("  ")
 print("   Fractional Change in halo mass:", (DF.TotalMass() - M0)/M0)
@@ -206,8 +224,8 @@ print("   Change in halo energy [(km/s)^2]:", DF.TotalEnergy() - E0)
 #print("   Change in halo energy (2):", Ef_alt - E0_alt)
 
 print("  ")
-print("   Dynamical friction energy change [(km/s)^2]:", DF_init*Delta_rho_dt[-1])
-print("   Fractional error in DF:", ((DF.TotalEnergy() - E0) + DF_init*Delta_rho_dt[-1])/(DF_init*Delta_rho_dt[-1]))
+print("   Dynamical friction energy change [(km/s)^2]:", DeltaE[-1])
+print("   Fractional error in DF:", ((DF.TotalEnergy() - E0) + DeltaE[-1])/(DeltaE[-1]))
 
 plt.show()
 

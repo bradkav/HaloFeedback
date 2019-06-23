@@ -186,7 +186,7 @@ class DistributionFunction():
         return eps_avg, frac
         
         
-    def dEdt_DF(self, r, SPEED_CUT = False):
+    def dEdt_DF(self, r, SPEED_CUT = False, average = True):
         """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun"""
         v_orb = np.sqrt(self.psi(r))
         
@@ -198,7 +198,16 @@ class DistributionFunction():
         #CoulombLog = 0.5*np.log((1 + self.b_max(v_orb)**2/self.b_90(v_orb)**2)/(1 + self.b_min(v_orb)**2/self.b_90(v_orb)**2))
         CoulombLog = np.log(self.Lambda)
             
-        return (1/pc_to_km)*4*np.pi*G_N**2*self.M_NS**2*self.rho(r, v_cut)*CoulombLog/v_orb
+        if (average):
+            r_list = r + np.linspace(-1, 1, 3)*self.b_max(v_orb)
+            rho_list = np.array([self.rho(r1, v_cut) for r1 in r_list])
+            rho_eff = np.trapz(rho_list*r_list, r_list)/np.trapz(r_list, r_list)
+        
+        else:
+            rho_eff = self.rho(r, v_cut)
+        
+            
+        return (1/pc_to_km)*4*np.pi*G_N**2*self.M_NS**2*rho_eff*CoulombLog/v_orb
 
     def E_orb(self,r):
         return -0.5*G_N*(self.M_BH + self.M_NS)/r
