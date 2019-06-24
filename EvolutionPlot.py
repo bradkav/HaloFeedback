@@ -42,7 +42,7 @@ N_step = int(N_orb/orbits_per_step)
 
 dt = T_orb*orbits_per_step
 
-t_list = np.zeros(N_step + 1)
+t_list = dt*N_step*np.linspace(0, 1, N_step + 1)
 
 #Number of radial points to calculate the density at
 N_r = 200
@@ -125,9 +125,10 @@ for i in range(N_step):
     df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut, method=METHOD)
     DF.f_eps += 0.5*dt*(df_dt_2 - df_dt_1)
     
+    #Change in energy of the halo
     delta_eps[i+1] = DF.TotalEnergy() - E0
-    t_list[i+1] = t_list[i] + dt
-    rho_avg_list[i+1] = ((r0 - DF.b_max(v0))*DF.rho(r0 - DF.b_max(v0)) + (r0 + DF.b_max(v0))*DF.rho(r0 + DF.b_max(v0)) )/(2*r0)
+
+    #Dynamical friction energy loss
     DF_list[i+1] = DF.dEdt_DF(r0, SPEED_CUT)
 
 
@@ -205,12 +206,30 @@ if (SAVE_PLOTS):
     plt.savefig(plot_dir + "Density_ratio_" + file_label + DF.IDstr_num + ".pdf", bbox_inches='tight')
 
 
+#---------------- Energy Conservation -----------------
+
+DeltaE = cumtrapz(DF_list, t_list, initial=0)
+
+plt.figure()
+
+plt.plot(t_list/T_orb, DeltaE, label="Halo")
+plt.plot(t_list/T_orb, -delta_eps, linestyle='--',label="NS")
+plt.plot(t_list/T_orb, t_list*DF_list[0], linestyle=':',label="NS (linearised)")
+
+plt.xlabel("Number of orbits")
+plt.ylabel(r"$|\Delta E|$ [$M_\odot$ (km/s)$^2$]")
+
+plt.legend(loc='best')
+
+if (SAVE_PLOTS):
+    plt.savefig(plot_dir + "DeltaE_" + file_label + DF.IDstr_num + ".pdf", bbox_inches='tight')
+
+
 #---------------- Diagnostics -------------------------
 
 # Changing density over time
 #Delta_rho_dt = cumtrapz(rho_avg_list, t_list, initial=0)/rho_avg_list[0]
 
-DeltaE = cumtrapz(DF_list, t_list, initial=0)
 
 
 rho_full = np.array([DF.rho(r) for r in r_list])
