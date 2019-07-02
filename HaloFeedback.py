@@ -27,6 +27,8 @@ pc_to_km = 3.0857e13
 #Numerical parameters
 N_grid = 10000  #Number of grid points in the specific energy
 
+float_2eps = 2. * np.finfo(float).eps
+
 #------------------
 
 
@@ -342,8 +344,6 @@ class DistributionFunction():
 #---------------------
 #----- METHOD 2   ----
 #---------------------
-
-float_2eps = 2. * np.finfo(float).eps
 
     #Angular integral
     def B_fun(self, r, eps):
