@@ -140,13 +140,53 @@ class DistributionFunction():
         
         assert (method in [1, 2])
     
-        if (method == 1):
+        # May be able to force the number of particles added not to exceed the number of particles removed
+    
+        if (method == 1):    
             return self.dfdt_minus_1(r0, v_orb, v_cut) + self.dfdt_plus_1(r0, v_orb, v_cut, n_kick)
         elif (method == 2):
             return self.dfdt_minus_2(r0, v_orb, v_cut) + self.dfdt_plus_2(r0, v_orb, v_cut, n_kick)
+        
     
 
-       
+    def delta_f(self, r0, v_orb, dt, v_cut=-1, method = 2):
+        """Change in f over a time-step dt
+        
+        Automatically uses a single-kick.
+        Also automatically prevents f_eps going below zero...
+        
+        NOTE: THIS IS ESSENTIALLY JUST A DIFFERENT IMPLEMENTATION
+        OF dfdt...
+        
+        Parameters:
+            - r0 : radial position of the perturbing body [pc]
+            - v_orb: orbital velocity [km/s]
+            - dt: time-step [s]
+            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
+                        defaults to v_max(r) (i.e. all particles)
+            - method: optional, method = 1 or method = 2 chooses two different
+                        approximate calculations of the scattering probability
+                        (method 2 should be more accurate) 
+        """
+        
+        assert (method in [1, 2])
+    
+        # May be able to force the number of particles added not to exceed the number of particles removed
+    
+        if (method == 1):    
+            f_minus = self.dfdt_minus_1(r0, v_orb, v_cut)*dt
+        elif ( method == 2):
+            f_minus = self.dfdt_minus_2(r0, v_orb, v_cut)*dt
+        
+        #Don't remove more particles than there are particles...    
+        f_minus = np.clip(f_minus, -self.f_eps, 0)
+            
+        #Take those particles and 'shift' them by delta_eps
+        delta_eps = -2*v_orb**2*np.log(1+self.Lambda**2)/self.Lambda**2
+        eps_old = self.eps_grid - delta_eps            
+        f_plus = -np.interp(eps_old[::-1], self.eps_grid[::-1], f_minus[::-1], left=0, right=0)[::-1]*(self.eps_grid/eps_old)**2.5
+            
+        return f_minus + f_plus   
 
     def P_delta_eps(self, v, delta_eps):
         """
@@ -303,15 +343,21 @@ class DistributionFunction():
 #----- METHOD 2   ----
 #---------------------
 
+float_2eps = 2. * np.finfo(float).eps
+
     #Angular integral
     def B_fun(self, r, eps):
+       # fudge = 1e-7 #Need a small offset to stop some values going negative
+
+       # A = r**2
+       # B = np.sqrt(eps)*(2*eps - self.psi(r))*np.sqrt(self.psi(r) - eps + fudge)
+       # C = self.psi(r)**2*np.arctan(np.sqrt(eps/(self.psi(r) - eps + fudge)))
+       A = self.psi(r) - eps
+       A = np.where(A <= float_2eps, float_2eps, A)
+       B = np.sqrt(eps)*(2*eps - self.psi(r))*np.sqrt(A)
+       C = self.psi(r)**2*np.arctan(np.sqrt(eps/(A)))
+       return r**2*(B + C)
         
-        fudge = 1e-7 #Need a small offset to stop some values going negative
-        
-        A = r**2
-        B = np.sqrt(eps)*(2*eps - self.psi(r))*np.sqrt(self.psi(r) - eps + fudge)
-        C = self.psi(r)**2*np.arctan(np.sqrt(eps/(self.psi(r) - eps + fudge)))
-        return r**2*(B + C)
         
         
     def dfdt_minus_2(self, r0, v_orb, v_cut=-1):
@@ -405,6 +451,7 @@ class DistributionFunction():
             frac_list = self.P_delta_eps(v_orb, delta_eps_list)*0.5*(step[:-1] + step[1:])/renorm
         
         #print(delta_eps_list, 2*v_orb**2*np.log(1+self.Lambda**2)/self.Lambda**2)
+        T_orb = (2*np.pi*r0*pc_to_km)/v_orb
         
         # Sum over the kicks
         for delta_eps, frac in zip(delta_eps_list, frac_list):
@@ -428,5 +475,5 @@ class DistributionFunction():
             # Multiply by weights and P_scat
             df[mask] += frac*f_old*(self.b_max(v_orb)*eps_old[mask]*(G_N*self.M_BH)**-3)*(B1 - B2)*(self.eps_grid[mask]/eps_old[mask])**2.5
         
-        T_orb = (2*np.pi*r0*pc_to_km)/v_orb
+        
         return df/T_orb
