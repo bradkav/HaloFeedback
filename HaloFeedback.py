@@ -143,7 +143,6 @@ class DistributionFunction():
     
     
     
-    
     def dfdt(self, r0, v_orb, v_cut=-1):
         """Time derivative of the distribution function f(eps).
         
@@ -155,11 +154,35 @@ class DistributionFunction():
         """
     
         return self.dfdt_minus(r0, v_orb, v_cut, N_KICK)  + self.dfdt_plus(r0, v_orb, v_cut, N_KICK)
-    
-    
+
+
+    def delta_f(self, r0, v_orb, dt, v_cut=-1):
+        """Change in f over a time-step dt
+        
+        Automatically prevents f_eps going below zero...
+        
+        NOTE: THIS IS ESSENTIALLY JUST A DIFFERENT IMPLEMENTATION
+        OF dfdt...
+        
+        Parameters:
+            - r0 : radial position of the perturbing body [pc]
+            - v_orb: orbital velocity [km/s]
+            - dt: time-step [s]
+            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
+                        defaults to v_max(r) (i.e. all particles)
+        """
+        
+        f_minus = self.dfdt_minus(r0, v_orb, v_cut, N_KICK)*dt
+        
+        #Don't remove more particles than there are particles...         
+        correction = np.clip(self.f_eps/(-f_minus + 1e-50), 0, 1) 
+        
+        f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK, correction)*dt
+        
+        return np.clip(f_minus, -self.f_eps, 0) + f_plus
 
     def P_delta_eps(self, v, delta_eps):
-        """
+        """1
         Calcuate PDF for delta_eps
         """  
         norm = self.b_90(v)**2/(self.b_max(v)**2 - self.b_min(v)**2)
@@ -192,7 +215,6 @@ class DistributionFunction():
         frac = np.diff(F_norm(eps_edges))
         eps_avg = np.diff(F_avg(eps_edges))/frac
         
-        #*1.000450641
         return eps_avg, frac
         
         
@@ -226,9 +248,12 @@ class DistributionFunction():
         return 2*np.pi*np.sqrt(pc_to_km**2*r**3/(G_N*(self.M_BH + self.M_NS)))
         
 
-    def interpolate_DF(self, eps_old):
+    def interpolate_DF(self, eps_old, correction=1):
         # Distribution of particles before they scatter
-        f_old = np.interp(eps_old[::-1], self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)[::-1]
+        if hasattr(correction, '__len__'):
+            f_old = np.interp(eps_old[::-1], self.eps_grid[::-1], self.f_eps[::-1]*correction[::-1], left=0, right=0)[::-1]
+        else:
+            f_old = np.interp(eps_old[::-1], self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)[::-1]
         return f_old
 
 
@@ -294,7 +319,7 @@ class DistributionFunction():
         norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
         return norm*df/T_orb/self.DoS()
         
-    def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick = 1):
+    def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick = 1, correction = 1):
         """Particles to add back into distribution function from E - dE -> E."""
         if (v_cut < 0):
             v_cut = self.v_max(r0)
@@ -336,7 +361,7 @@ class DistributionFunction():
             mask = (eps_old > self.psi(r0)*(1-b/r0) - 0.5*v_cut**2) & (eps_old < self.psi(r0)*(1+b/r0))
         
             # Distribution of particles before they scatter
-            f_old = self.interpolate_DF(eps_old[mask])
+            f_old = self.interpolate_DF(eps_old[mask],correction)
 
             L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 1)
             alpha1 = np.arccos(L1)
@@ -350,7 +375,7 @@ class DistributionFunction():
             N1[mask1] = (ellipeinc((np.pi-alpha1[mask1])/2, m[mask1]) - ellipeinc((np.pi - alpha2[mask1])/2, m[mask1]))
             N1[mask2] = (ellipeinc_alt((np.pi-alpha1[mask2])/2, m[mask2]) - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2]))
             
-            df[mask] += +frac*f_old*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1
+            df[mask] += frac*f_old*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1
             
         T_orb = (2*np.pi*r0*pc_to_km)/v_orb
         norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
@@ -358,7 +383,7 @@ class DistributionFunction():
         
         
         
-    def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick = N_KICK):
+    def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick = N_KICK, correction = np.ones(N_GRID)):
         """Calculate carried away by particles which are completely unbound.
         
         Parameters:
@@ -419,7 +444,8 @@ class DistributionFunction():
             N1[mask1] = (ellipeinc((np.pi-alpha1[mask1])/2, m[mask1]) - ellipeinc((np.pi - alpha2[mask1])/2, m[mask1]))
             N1[mask2] = (ellipeinc_alt((np.pi-alpha1[mask2])/2, m[mask2]) - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2]))
 
-            dE[mask] += -frac*self.f_eps[mask]*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1*(self.eps_grid[mask] + delta_eps)
+            dE[mask] += -frac*correction[mask]*self.f_eps[mask]*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1*(self.eps_grid[mask] + delta_eps)
             
         norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
         return norm*np.trapz(dE, self.eps_grid)/T_orb
+        

@@ -11,7 +11,7 @@ from matplotlib import gridspec
 import matplotlib
 
 #Save the plots to file?
-SAVE_PLOTS = True
+SAVE_PLOTS = False
 plot_dir = "../../plots/HaloFeedback/"
 
 #Only affect particles below the orbital speed?
@@ -43,7 +43,7 @@ dt = T_orb*orbits_per_step
 t_list = dt*N_step*np.linspace(0, 1, N_step + 1)
 
 #Number of radial points to calculate the density at
-N_r = 500
+N_r = 100
 
 print("    Number of orbits:", N_orb)
 print("    Time [days]:", N_step*dt/(3600*24))
@@ -52,7 +52,8 @@ print("    Time [days]:", N_step*dt/(3600*24))
 E0 = DF.TotalEnergy()
 
 #Radial grid for calculating the density
-r_list = np.geomspace(DF.r_isco, 1e3*r0, N_r-1)
+#r_list = np.geomspace(DF.r_isco, 1e3*r0, N_r-1)
+r_list = np.geomspace(0.9e-9, 1.1e-7, N_r-1)
 r_list =  np.sort(np.append(r_list, r0))
 rho_list = np.zeros((N_step+1, N_r))
 rho_avg_list = np.zeros(N_step+1)
@@ -118,6 +119,10 @@ for i in range(N_step):
     
     
     M_list[i] = DF.TotalMass()
+    
+    #Total energy carried away so far by unbound particles
+    E_ej_tot[i+1] = E_ej_tot[i] + DF.dEdt_ej(r0=r0, v_orb=v0, v_cut=v_cut)*dt
+    
     #Time-step using the improved Euler method
     df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
     DF.f_eps += df_dt_1*dt
@@ -125,11 +130,16 @@ for i in range(N_step):
     df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
     DF.f_eps += 0.5*dt*(df_dt_2 - df_dt_1)
     
+    #df1 = DF.delta_f(r0=r0, v_orb=v0, dt=dt, v_cut=v_cut)
+    #DF.f_eps += df1
+    #df2 = DF.delta_f(r0=r0, v_orb=v0, dt=dt, v_cut=v_cut)
+    #DF.f_eps += 0.5*(df2 - df1)
+    #DF.f_eps = np.clip( DF.f_eps, 0, 1e30)
+    
     #Change in energy of the halo
     delta_eps[i+1] = DF.TotalEnergy() - E0
 
-    #Total energy carried away so far by unbound particles
-    E_ej_tot[i+1] = E_ej_tot[i] + DF.dEdt_ej(r0=r0, v_orb=v0, v_cut=v_cut)*dt
+
 
     #Dynamical friction energy loss
     DF_list[i+1] = DF.dEdt_DF(r0, SPEED_CUT)
