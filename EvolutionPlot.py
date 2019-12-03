@@ -34,7 +34,7 @@ if (SPEED_CUT):
 T_orb = 2*np.pi*r0*3.0857e13/v0
 
 #Number of orbits to evolve
-N_orb = 24000
+N_orb = 40000
 orbits_per_step = 250
 N_step = int(N_orb/orbits_per_step)
 
@@ -174,7 +174,7 @@ ax0.axvline(r0, linestyle='--', color='black')
 for n in [0, N_orb/4, N_orb/2, 3*N_orb/4, N_orb]:
     ax0.plot([0,0], [-1, -1], '-', color=cmap(n/N_orb), label = str(int(n)) + ' orbits')
 
-ax0.plot([0,0], [-1, -1], 'w-', label="($\sim$26 days)")
+ax0.plot([0,0], [-1, -1], 'w-', label="($\sim$43 days)")
 ax0.legend(loc='best',fontsize=12)
 
 ax0.set_xlim(1e-9, 1e-7)
