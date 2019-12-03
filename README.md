@@ -26,7 +26,7 @@ The code also allows you to calculate the rate at which energy is carried away f
 ```python
     def dEdt_ej(self, r0, v_orb, v_cut=-1):
     """
-    Calculate carried away by particles which are completely unbound.
+        Calculate carried away by particles which are completely unbound.
         
         Parameters:
             - r0 : radial position of the perturbing body [pc]
@@ -36,6 +36,22 @@ The code also allows you to calculate the rate at which energy is carried away f
             - n_kick: optional, number of grid points to use when integrating over
                         Delta-eps (defaults to N_KICK = 100).
     """
+```
+
+At any time during the simulation, the density of DM at a given radius can be extracted using:
+
+```python
+
+    def rho(self, r, v_cut=-1):
+    """
+        DM mass density computed from f(eps).
+        
+        Parameters: 
+            - r : radius in pc
+            - v_cut : maximum speed to include in density calculation
+                     (defaults to v_max if not specified)
+    """
+
 ```
 
 #### Updates
