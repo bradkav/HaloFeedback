@@ -4,7 +4,7 @@ Code for evolving a Dark Matter minispike under the influence of a perturbing bo
 
 #### Usage
 
-
+See the example notebook [`Example.ipynb`](https://github.com/bradkav/HaloFeedback/blob/master/Example.ipynb) on how to initialise the code and the DM halo.
 
 The main functionality of the code is through the function `dfdt`, which calculates the time derivative of the distribution function over a grid of energies Epsilon.
 
