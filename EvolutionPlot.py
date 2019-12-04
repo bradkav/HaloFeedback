@@ -22,7 +22,7 @@ DF = HaloFeedback.DistributionFunction( M_BH = 1000)
 
 #Radius position and velocity of the orbiting body
 r0 = 1e-8
-v0 = np.sqrt(G_N*DF.M_BH/(r0))
+v0 = np.sqrt(G_N*(DF.M_BH+DF.M_NS)/(r0))
 
 v_cut = -1
 file_label = ""
@@ -35,7 +35,7 @@ T_orb = 2*np.pi*r0*3.0857e13/v0
 
 #Number of orbits to evolve
 N_orb = 40000
-orbits_per_step = 250
+orbits_per_step = 500
 N_step = int(N_orb/orbits_per_step)
 
 dt = T_orb*orbits_per_step
@@ -70,7 +70,7 @@ DF_list = np.zeros(N_step+1)
 E_ej_tot = 0.0*t_list
 
 #Calculate initial DF energy loss rate
-DF_list[0] = DF.dEdt_DF(r0, SPEED_CUT)
+DF_list[0] = DF.dEdt_DF(r0, v_cut)
 
 #Initial density
 if (SPEED_CUT):
@@ -124,14 +124,14 @@ for i in range(N_step):
     E_ej_tot[i+1] = E_ej_tot[i] + DF.dEdt_ej(r0=r0, v_orb=v0, v_cut=v_cut)*dt
     
     #Time-step using the improved Euler method
-    df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
-    DF.f_eps += df_dt_1*dt
+    #df_dt_1 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
+    #DF.f_eps += df_dt_1*dt
     
-    df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
-    DF.f_eps += 0.5*dt*(df_dt_2 - df_dt_1)
+    #df_dt_2 = DF.dfdt(r0=r0, v_orb=v0, v_cut=v_cut)
+    #DF.f_eps += 0.5*dt*(df_dt_2 - df_dt_1)
     
-    #df1 = DF.delta_f(r0=r0, v_orb=v0, dt=dt, v_cut=v_cut)
-    #DF.f_eps += df1
+    df1 = DF.delta_f(r0=r0, v_orb=v0, dt=dt, v_cut=v_cut)
+    DF.f_eps += df1
     #df2 = DF.delta_f(r0=r0, v_orb=v0, dt=dt, v_cut=v_cut)
     #DF.f_eps += 0.5*(df2 - df1)
     #DF.f_eps = np.clip( DF.f_eps, 0, 1e30)
@@ -142,7 +142,7 @@ for i in range(N_step):
 
 
     #Dynamical friction energy loss
-    DF_list[i+1] = DF.dEdt_DF(r0, SPEED_CUT)
+    DF_list[i+1] = DF.dEdt_DF(r0, v_cut)
 
 
 plt.xlim(1.5e8, 4.5e8)
