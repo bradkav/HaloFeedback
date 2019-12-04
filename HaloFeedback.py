@@ -69,6 +69,17 @@ class DistributionFunction():
         self.IDstr_model = "gamma=%.2f_rhosp=.%1f"%(gamma, rho_sp)
         
         
+        
+    def plotDF(self):
+        plt.figure()
+        plt.semilogy(self.eps_grid, self.f_init(), 'k--')
+        plt.semilogy(self.eps_grid, self.f_eps)
+        plt.xlim(1.e8, 5e8)
+        plt.ylim(1e3, 1e9)
+        plt.xlabel(r'$\mathcal{E} = \Psi(r) - \frac{1}{2}v^2$ [(km/s)$^2$]')
+        plt.ylabel(r'$f(\mathcal{E})$ [$M_\odot$ pc$^{-3}$ (km/s)$^{-3}$]')
+        plt.show()
+        
     def f_init(self):
         A1 = (self.r_sp/(G_N*self.M_BH))
         return self.rho_sp*(self.gamma*(self.gamma - 1)*A1**self.gamma*np.pi**-1.5/np.sqrt(8))*(Gamma_func(-1 + self.gamma)/Gamma_func(-1/2 + self.gamma))*self.eps_grid**(-(3/2) + self.gamma) 

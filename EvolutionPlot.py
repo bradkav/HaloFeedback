@@ -145,7 +145,7 @@ for i in range(N_step):
     DF_list[i+1] = DF.dEdt_DF(r0, v_cut)
 
 
-plt.xlim(1.5e8, 4.5e8)
+plt.xlim(1.e8, 4.5e8)
 plt.ylim(1e3, 1e9)
 
 plt.axvline(G_N*DF.M_BH/r0, linestyle='-', color='k')
@@ -163,6 +163,8 @@ plt.legend(loc='best')
 if (SAVE_PLOTS):
     plt.savefig(plot_dir + "f_eps_" + file_label + DF.IDstr_num + ".pdf", bbox_inches='tight')
 
+
+#DF.plotDF()
 
 #------------------------- Density -------------------------
 
