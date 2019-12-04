@@ -165,8 +165,8 @@ class DistributionFunction():
         """
     
     
-        return self.dfdt_minus(np.asscalar(r0), np.asscalar(v_orb), np.asscalar(v_cut), N_KICK) \
-                 + self.dfdt_plus(np.asscalar(r0), np.asscalar(v_orb), np.asscalar(v_cut), N_KICK)
+        return self.dfdt_minus(np.asscalar(np.array(r0)), np.asscalar(np.array(v_orb)), np.asscalar(np.array(v_cut)), N_KICK) \
+                 + self.dfdt_plus(np.asscalar(np.array(r0)), np.asscalar(np.array(v_orb)), np.asscalar(np.array(v_cut)), N_KICK)
 
 
     def delta_f(self, r0, v_orb, dt, v_cut=-1):
@@ -185,12 +185,12 @@ class DistributionFunction():
                         defaults to v_max(r) (i.e. all particles)
         """
         
-        f_minus = self.dfdt_minus(np.asscalar(r0), np.asscalar(v_orb), np.asscalar(v_cut), N_KICK)*dt
+        f_minus = self.dfdt_minus(np.asscalar(np.array(r0)), np.asscalar(np.array(v_orb)), np.asscalar(np.array(v_cut)), N_KICK)*dt
         
         #Don't remove more particles than there are particles...         
         correction = np.clip(self.f_eps/(-f_minus + 1e-50), 0, 1) 
         
-        f_plus = self.dfdt_plus(np.asscalar(r0), np.asscalar(v_orb), np.asscalar(v_cut), N_KICK, correction)*dt
+        f_plus = self.dfdt_plus(np.asscalar(np.array(r0)), np.asscalar(np.array(v_orb)), np.asscalar(np.array(v_cut)), N_KICK, correction)*dt
         
         return np.clip(f_minus, -self.f_eps, 0) + f_plus
 

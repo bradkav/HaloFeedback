@@ -295,5 +295,5 @@ print("  ")
 print("   Dynamical friction energy change [(km/s)^2]:", DeltaE[-1])
 print("   Fractional error in DF:", ((DF.TotalEnergy() - E0 + E_ej_tot[-1]) + DeltaE[-1])/(DeltaE[-1]))
 
-plt.show()
+#plt.show()
 
