@@ -23,6 +23,7 @@ DF = HaloFeedback.DistributionFunction( M_BH = 1000)
 #Radius position and velocity of the orbiting body
 r0 = 1e-8
 v0 = np.sqrt(G_N*(DF.M_BH+DF.M_NS)/(r0))
+print(v0)
 
 v_cut = -1
 file_label = ""
