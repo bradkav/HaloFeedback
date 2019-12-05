@@ -36,7 +36,7 @@ T_orb = 2*np.pi*r0*3.0857e13/v0
 
 #Number of orbits to evolve
 N_orb = 40000
-orbits_per_step = 500
+orbits_per_step = 200
 N_step = int(N_orb/orbits_per_step)
 
 dt = T_orb*orbits_per_step
@@ -140,8 +140,6 @@ for i in range(N_step):
     #Change in energy of the halo
     delta_eps[i+1] = DF.TotalEnergy() - E0
 
-
-
     #Dynamical friction energy loss
     DF_list[i+1] = DF.dEdt_DF(r0, v_cut)
 
@@ -202,7 +200,9 @@ if (SPEED_CUT):
 else:   
     ax0.set_ylabel(r'$\rho(r)$ [$M_\odot$ pc$^{-3}$]')
 
+r_new, rho_new = np.loadtxt("Density.txt", unpack=True)
 
+ax0.loglog(r_new, rho_new, alpha=0.5, color='k', linestyle='--')
 
 ax1.axvline(r0, linestyle='--', color='black')
 if (SPEED_CUT):
@@ -215,6 +215,7 @@ ax1.set_ylim(0, 2.0)
 ax1.set_yticks(np.linspace(0, 2, 21), minor=True)
 ax1.set_xticklabels([])
 
+#np.savetxt("Density.txt", list(zip(r_list,rho_list[-1,:])))
 
 if (SAVE_PLOTS):
     plt.savefig(plot_dir + "Density_" + file_label + DF.IDstr_num + ".pdf", bbox_inches='tight')
@@ -295,5 +296,5 @@ print("  ")
 print("   Dynamical friction energy change [(km/s)^2]:", DeltaE[-1])
 print("   Fractional error in DF:", ((DF.TotalEnergy() - E0 + E_ej_tot[-1]) + DeltaE[-1])/(DeltaE[-1]))
 
-#plt.show()
+plt.show()
 

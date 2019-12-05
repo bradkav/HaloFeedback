@@ -26,8 +26,8 @@ c = 2.99792458e5 #km/s
 pc_to_km = 3.0857e13
 
 #Numerical parameters
-N_GRID = 20000  #Number of grid points in the specific energy
-N_KICK = 100    #Number of points to use for integration over Delta-epsilon
+N_GRID = 10000  #Number of grid points in the specific energy
+N_KICK = 50    #Number of points to use for integration over Delta-epsilon
 
 float_2eps = 2. * np.finfo(float).eps
 
@@ -57,8 +57,8 @@ class DistributionFunction():
         self.r_isco = 6.0*G_N*M_BH/c**2
         
         #Initialise grid of r, eps and f(eps)
-        self.r_grid = np.geomspace(self.r_isco, 1e-3*self.r_sp, N_GRID-100)
-        self.r_grid = np.append(self.r_grid, np.geomspace(1.01*self.r_grid[-1], 1e3*self.r_sp, 100))
+        self.r_grid = np.geomspace(self.r_isco, 1e5*self.r_isco, N_GRID-1000)
+        self.r_grid = np.append(self.r_grid, np.geomspace(1.01*self.r_grid[-1], 1e3*self.r_sp, 1000))
         self.eps_grid = self.psi(self.r_grid)
     
         self.f_eps = self.f_init()
@@ -104,7 +104,7 @@ class DistributionFunction():
             v_cut = self.v_max(r)
             
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut**2, 500))
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
         flist = np.interp(self.psi(r) - 0.5*vlist**2, self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)
         integ = vlist**2*flist
         return 4*np.pi*np.trapz(integ, vlist)
@@ -115,7 +115,7 @@ class DistributionFunction():
         v_cut = self.v_max(r)
             
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut**2, 500))
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
         flist = np.interp(self.psi(r) - 0.5*vlist**2, self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)
         integ = vlist**4*flist
         return np.sqrt(np.trapz(integ, vlist)/np.trapz(vlist**2*flist, vlist))
@@ -323,25 +323,24 @@ class DistributionFunction():
             m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
+            
+            #N1 = np.ones(len(m))
             N1 = np.zeros(len(m))
             N1[mask1] = (ellipeinc((np.pi-alpha1[mask1])/2, m[mask1]) - ellipeinc((np.pi - alpha2[mask1])/2, m[mask1]))
             N1[mask2] = (ellipeinc_alt((np.pi-alpha1[mask2])/2, m[mask2]) - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2]))
             df[mask] += -frac*self.f_eps[mask]*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1
             
-        T_orb = (2*np.pi*r0*pc_to_km)/v_orb
+        #T_orb = (2*np.pi*r0*pc_to_km)/v_orb
         norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
-        return norm*df/T_orb/self.DoS()
+        return norm*df/self.T_orb(r0)/self.DoS()
         
     def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick = 1, correction = 1):
         """Particles to add back into distribution function from E - dE -> E."""
         if (v_cut < 0):
             v_cut = self.v_max(r0)
-        
-        T_orb = (2*np.pi*r0*pc_to_km)/v_orb
-        
+
         df = np.zeros(N_GRID)
-        
-        
+                
         # Calculate sizes of kicks and corresponding weights for integration
         if (n_kick == 1):   #Replace everything by the average if n_kick = 1
             delta_eps_list = (-2*v_orb**2*np.log(1+self.Lambda**2)/self.Lambda**2,)
@@ -384,17 +383,78 @@ class DistributionFunction():
             m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
+            
+            #N1 = np.ones(len(m))
             N1 = np.zeros(len(m))
             N1[mask1] = (ellipeinc((np.pi-alpha1[mask1])/2, m[mask1]) - ellipeinc((np.pi - alpha2[mask1])/2, m[mask1]))
             N1[mask2] = (ellipeinc_alt((np.pi-alpha1[mask2])/2, m[mask2]) - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2]))
             
             df[mask] += frac*f_old*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1
             
-        T_orb = (2*np.pi*r0*pc_to_km)/v_orb
+
         norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
-        return norm*df/T_orb/self.DoS()
+        return norm*df/self.T_orb(r0)/self.DoS()
         
+    def dfdt_total(self, r0, v_orb, v_cut=-1, n_kick = 1, correction = 1):
+        """Particles to add back into distribution function from E - dE -> E."""
+        if (v_cut < 0):
+            v_cut = self.v_max(r0)
+
+        df = np.zeros(N_GRID)
+                
+        # Calculate sizes of kicks and corresponding weights for integration
+        if (n_kick == 1):   #Replace everything by the average if n_kick = 1
+            delta_eps_list = (-2*v_orb**2*np.log(1+self.Lambda**2)/self.Lambda**2,)
+            frac_list = (1,)
+      
+        else:
+           b_list = np.geomspace(self.b_min(v_orb), self.b_max(v_orb), n_kick)
+           delta_eps_list = self.delta_eps_of_b(v_orb, b_list)
+           
+           #Step size for trapezoidal integration
+           step = delta_eps_list[1:] - delta_eps_list[:-1]
+           step = np.append(step, 0)
+           step = np.append(0, step)
+           
+           #Make sure that the integral is normalised correctly
+           renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+           frac_list = 0.5*(step[:-1] + step[1:])/renorm
+       
+
+        #Sum over the kicks
+        for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
+            
+            #Value of specific energy before the kick
+            eps_old = self.eps_grid - delta_eps
         
+            r_eps = G_N*self.M_BH/eps_old
+            r_cut = G_N*self.M_BH/(eps_old + 0.5*v_cut**2)
+        
+            #Define which energies are allowed to scatter
+            mask = (eps_old > self.psi(r0)*(1-b/r0) - 0.5*v_cut**2) & (eps_old < self.psi(r0)*(1+b/r0))
+        
+            # Distribution of particles before they scatter
+            f_old = self.interpolate_DF(eps_old[mask],correction)
+
+            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 1)
+            alpha1 = np.arccos(L1)
+            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -1)
+            alpha2 = np.arccos(L2)
+
+            m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
+            mask1 = (m <= 1) & (alpha2 > alpha1)
+            mask2 = (m > 1) & (alpha2 > alpha1)
+            
+            #N1 = np.ones(len(m))
+            N1 = np.zeros(len(m))
+            N1[mask1] = (ellipeinc((np.pi-alpha1[mask1])/2, m[mask1]) - ellipeinc((np.pi - alpha2[mask1])/2, m[mask1]))
+            N1[mask2] = (ellipeinc_alt((np.pi-alpha1[mask2])/2, m[mask2]) - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2]))
+            
+            df[mask] += frac*f_old*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1
+            
+
+        norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
+        return norm*df/self.T_orb(r0)/self.DoS() 
         
     def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick = N_KICK, correction = np.ones(N_GRID)):
         """Calculate carried away by particles which are completely unbound.
@@ -409,8 +469,7 @@ class DistributionFunction():
         """
         if (v_cut < 0):
             v_cut = self.v_max(r0)
-        
-        T_orb = (2*np.pi*r0*pc_to_km)/v_orb
+
         
         dE = np.zeros(N_GRID)
         
@@ -453,6 +512,8 @@ class DistributionFunction():
             m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
+            
+            #N1 = np.ones(len(m))
             N1 = np.zeros(len(m))
             N1[mask1] = (ellipeinc((np.pi-alpha1[mask1])/2, m[mask1]) - ellipeinc((np.pi - alpha2[mask1])/2, m[mask1]))
             N1[mask2] = (ellipeinc_alt((np.pi-alpha1[mask2])/2, m[mask2]) - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2]))
@@ -460,5 +521,5 @@ class DistributionFunction():
             dE[mask] += -frac*correction[mask]*self.f_eps[mask]*(1+b**2/self.b_90(v_orb)**2)**2*np.sqrt(1 - r0/r_eps[mask] + b/r0)*N1*(self.eps_grid[mask] + delta_eps)
             
         norm = 2*np.sqrt(2*(self.psi(r0)))*4*np.pi**2*r0*(self.b_90(v_orb)**2/(v_orb)**2)
-        return norm*np.trapz(dE, self.eps_grid)/T_orb
+        return norm*np.trapz(dE, self.eps_grid)/self.T_orb(r0)
         
