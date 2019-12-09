@@ -76,7 +76,7 @@ DF_list[0] = DF.dEdt_DF(r0, v_cut)
 #Initial density
 if (SPEED_CUT):
     #If we're only interested in particles below the local orbital speed
-    rho0 = np.array([DF.rho(r, v_cut = np.sqrt(G_N*DF.M_BH/r)) for r in r_list])
+    rho0 = np.array([DF.rho(r, v_cut = np.sqrt(G_N*(DF.M_BH+DF.M_NS)/r)) for r in r_list])
 else:
     rho0 = np.array([DF.rho(r) for r in r_list])
 
@@ -114,7 +114,7 @@ for i in range(N_step):
     
     #Calculate the density profile
     if (SPEED_CUT):
-        rho_list[i+1,:] = np.array([DF.rho(r, v_cut = np.sqrt(G_N*DF.M_BH/r)) for r in r_list])
+        rho_list[i+1,:] = np.array([DF.rho(r, v_cut = np.sqrt(G_N*(DF.M_BH+DF.M_NS)/r)) for r in r_list])
     else:
         rho_list[i+1,:]= np.array([DF.rho(r) for r in r_list])
     
