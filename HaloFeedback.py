@@ -26,8 +26,8 @@ c = 2.9979e5 #km/s
 pc_to_km = 3.085677581e13
 
 #Numerical parameters
-N_GRID = 20000  #Number of grid points in the specific energy
-N_KICK = 100    #Number of points to use for integration over Delta-epsilon
+N_GRID = 10000  #Number of grid points in the specific energy
+N_KICK = 50    #Number of points to use for integration over Delta-epsilon
 
 float_2eps = 2. * np.finfo(float).eps
 
@@ -57,8 +57,8 @@ class DistributionFunction():
         self.r_isco = 6.0*G_N*M_BH/c**2
         
         #Initialise grid of r, eps and f(eps)
-        self.r_grid = np.geomspace(self.r_isco, 1e-3*self.r_sp, N_GRID-100)
-        self.r_grid = np.append(self.r_grid, np.geomspace(1.01*self.r_grid[-1], 1e3*self.r_sp, 100))
+        self.r_grid = np.geomspace(self.r_isco, 1e5*self.r_isco, N_GRID-1000)
+        self.r_grid = np.append(self.r_grid, np.geomspace(1.01*self.r_grid[-1], 1e3*self.r_sp, 1000))
         self.eps_grid = self.psi(self.r_grid)
     
         self.f_eps = self.f_init()
@@ -104,7 +104,7 @@ class DistributionFunction():
             v_cut = self.v_max(r)
             
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut**2, 500))
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
         flist = np.interp(self.psi(r) - 0.5*vlist**2, self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)
         integ = vlist**2*flist
         return 4*np.pi*np.trapz(integ, vlist)
@@ -115,7 +115,7 @@ class DistributionFunction():
         v_cut = self.v_max(r)
             
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut**2, 500))
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
         flist = np.interp(self.psi(r) - 0.5*vlist**2, self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)
         integ = vlist**4*flist
         return np.sqrt(np.trapz(integ, vlist)/np.trapz(vlist**2*flist, vlist))
