@@ -3,6 +3,7 @@ import numpy as np
 from scipy.special import gamma as Gamma_func
 from scipy.special import ellipeinc, ellipkinc
 from scipy.interpolate import interp1d
+from scipy.integrate import simps
 
 
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -104,10 +105,10 @@ class DistributionFunction():
             v_cut = self.v_max(r)
             
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 20000))
         flist = np.interp(self.psi(r) - 0.5*vlist**2, self.eps_grid[::-1], self.f_eps[::-1], left=0, right=0)
         integ = vlist**2*flist
-        return 4*np.pi*np.trapz(integ, vlist)
+        return 4*np.pi*simps(integ, vlist)
         
         
     def sigma_v(self, r):
@@ -303,7 +304,7 @@ class DistributionFunction():
            step = np.append(0, step)
        
            #Make sure that the integral is normalised correctly
-           renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+           renorm = simps(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
            frac_list = 0.5*(step[:-1] + step[1:])/renorm
        
         #Sum over the kicks
