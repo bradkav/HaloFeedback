@@ -316,9 +316,9 @@ class DistributionFunction():
             #Define which energies are allowed to scatter
             mask = (self.eps_grid > self.psi(r0)*(1-b/r0) - 0.5*v_cut**2) & (self.eps_grid < self.psi(r0)*(1+b/r0))
         
-            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 1)
+            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 0.999999)
             alpha1 = np.arccos(L1)
-            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -1)
+            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -0.999999)
             alpha2 = np.arccos(L2)
 
             m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
@@ -377,9 +377,9 @@ class DistributionFunction():
             # Distribution of particles before they scatter
             f_old = self.interpolate_DF(eps_old[mask],correction)
 
-            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 1)
+            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 0.999999)
             alpha1 = np.arccos(L1)
-            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -1)
+            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -0.999999)
             alpha2 = np.arccos(L2)
 
             m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
@@ -446,9 +446,9 @@ class DistributionFunction():
             #Define which energies are allowed to scatter
             mask = (self.eps_grid > self.psi(r0)*(1-b/r0) - 0.5*v_cut**2) & (self.eps_grid < self.psi(r0)*(1+b/r0)) & (b**2 < b_ej_sq)
         
-            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 1)
+            L1 = np.minimum((r0 - r0**2/r_eps[mask])/b, 0.999999)
             alpha1 = np.arccos(L1)
-            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -1)
+            L2 = np.maximum((r0 - r0**2/r_cut[mask])/b, -0.999999)
             alpha2 = np.arccos(L2)
 
             m = (2*b/r0)/(1 - (r0/r_eps[mask]) + b/r0)
