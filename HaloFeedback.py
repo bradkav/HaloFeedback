@@ -304,7 +304,7 @@ class DistributionFunction():
            step = np.append(0, step)
        
            #Make sure that the integral is normalised correctly
-           renorm = simps(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+           renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
            frac_list = 0.5*(step[:-1] + step[1:])/renorm
        
         #Sum over the kicks
