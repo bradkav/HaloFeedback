@@ -2,11 +2,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Code for evolving a Dark Matter minispike under the influence of a perturbing body, injecting energy through dynamical friction.
+Code for evolving a Dark Matter minispike under the influence of a perturbing body, injecting energy through dynamical friction. 
+
+See also associated animations at [DOI:10.6084/m9.figshare.11663676](https://doi.org/10.6084/m9.figshare.11663676).
 
 #### Getting started
 
-See the example notebook [`Example.ipynb`](https://github.com/bradkav/HaloFeedback/blob/master/Example.ipynb) on how to initialise the code and the DM halo. The script [`PlotEvolution.py`](https://github.com/bradkav/HaloFeedback/blob/master/PlotEvolution.py) evolves the halo in the case of an body orbiting at fixed radius, and generates various illustrative plots.
+See the example notebook [`Example.ipynb`](https://github.com/bradkav/HaloFeedback/blob/master/Example.ipynb) on how to initialise the code and the DM halo. The script [`PlotEvolution.py`](https://github.com/bradkav/HaloFeedback/blob/master/PlotEvolution.py) evolves the halo in the case of an body orbiting at fixed radius, and generates various illustrative plots (in [`plots/`](https://github.com/bradkav/HaloFeedback/blob/master/plots/)).
 
 #### Usage
 
