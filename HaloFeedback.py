@@ -160,7 +160,7 @@ class DistributionFunction():
         
         Parameters:
             - r0 : radial position of the perturbing body [pc]
-            - v_orb: orbital velocity [km/s]
+            - v_orb: orbital velocity of the perturbing body [km/s]
             - v_cut: optional, only scatter with particles slower than v_cut [km/s]
                         defaults to v_max(r) (i.e. all particles)
         """
@@ -171,12 +171,8 @@ class DistributionFunction():
 
 
     def delta_f(self, r0, v_orb, dt, v_cut=-1):
-        """Change in f over a time-step dt
-        
-        Automatically prevents f_eps going below zero...
-        
-        NOTE: THIS IS ESSENTIALLY JUST A DIFFERENT IMPLEMENTATION
-        OF dfdt...
+        """Change in f over a time-step dt.
+        Automatically prevents f_eps going below zero.       
         
         Parameters:
             - r0 : radial position of the perturbing body [pc]
