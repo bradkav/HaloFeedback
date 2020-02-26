@@ -1,6 +1,6 @@
 ## Halo Feedback
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3688812.svg)](https://doi.org/10.5281/zenodo.3688812) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Code for evolving a Dark Matter minispike under the influence of a perturbing body, injecting energy through dynamical friction. 
 
