@@ -4,7 +4,7 @@
 
 Code for evolving a Dark Matter minispike under the influence of a perturbing body, injecting energy through dynamical friction. 
 
-See also associated animations at [DOI:10.6084/m9.figshare.11663676](https://doi.org/10.6084/m9.figshare.11663676).
+Code released alongside the arXiv pre-print "*Detecting Dark Matter around Black Holes with Gravitational Waves: Effects of dark-matter dynamics on the gravitational waveform*". See also animations at [DOI:10.6084/m9.figshare.11663676](https://doi.org/10.6084/m9.figshare.11663676).
 
 #### Getting started
 
