@@ -77,6 +77,23 @@ At any time during the simulation, the density of DM at a given radius can be ex
 
 ```
 
+Or the rate of energy loss due to dynamical friction can be computed using:
+
+```python
+    def dEdt_DF(self, r, v_cut = -1, average = False):
+        """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun.
+        
+        Parameters:
+            - r : radial position of the perturbing body [pc]
+            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
+                        defaults to v_max(r) (i.e. all particles)
+            - average: determine whether to average over different radii
+                        (average = False is default and should be correct).
+        
+        """
+```
+
+
 #### Updates
 
 - *26/02/2020*:  Cleanup up `PlotEvolution.py` script. Ready for initial realise alongside arXiv preprint.  

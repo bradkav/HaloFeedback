@@ -229,7 +229,16 @@ class DistributionFunction():
         
         
     def dEdt_DF(self, r, v_cut = -1, average = False):
-        """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun"""
+        """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun.
+        
+        Parameters:
+            - r : radial position of the perturbing body [pc]
+            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
+                        defaults to v_max(r) (i.e. all particles)
+            - average: determine whether to average over different radii
+                        (average = False is default and should be correct).
+        
+        """
         v_orb = np.sqrt(G_N*(self.M_BH + self.M_NS)/r)
         
         #if (SPEED_CUT):
