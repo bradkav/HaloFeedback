@@ -27,7 +27,7 @@ The main functionality of the code is through the function `dfdt`, which calcula
     """
 ```
 
-An alternative implementation `delta_f` computes the change in the distribution function over a timestep `dt`. This behaves better under large timestep as it prevents the distribution function going negative.
+An alternative implementation `delta_f` computes the change in the distribution function over a timestep `dt`. This behaves better under large timesteps as it prevents the distribution function going negative.
 
 ```python
     def delta_f(self, r0, v_orb, dt, v_cut=-1):
