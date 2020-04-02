@@ -604,3 +604,79 @@ class PowerLawSpike(DistributionFunction):
         return self.rho_sp * (self.r_sp / r) ** self.gamma
 
 
+class PlateauSpike(DistributionFunction):
+    """
+    A spike with no DM particles whose orbits are completely contained within
+    an annihilation plateau of radius r_p:
+
+        rho(r)=
+            rho_s (r_s / r)^gamma,                   r_s > r > r_p
+            rho_s (r_s / r_p)^gamma (r_p / r)^{1/2}, r_p > r
+
+    The parameter r_sp is defined as r_sp = 0.2 r_h, where r_h is the radius of
+    the sphere within which the DM mass is twice the central BH mass.
+
+    Notes
+    -----
+    The parameters are not properties, so r_sp will not have the correct value
+    if rho_sp or gamma are changed after initialization.
+    """
+
+    def __init__(self, M_BH=1e3, M_NS=1., gamma=7 / 3, rho_sp=226, r_p=0.0, Lambda=-1):
+        self.M_BH = M_BH  # Solar mass
+        self.M_NS = M_NS  # Solar mass
+        self.gamma = gamma  # Slope of DM density profile
+        self.rho_sp = rho_sp  # Solar mass/pc^3
+        self.r_sp = (
+            (3 - self.gamma)
+            * (0.2 ** (3.0 - self.gamma))
+            * self.M_BH
+            / (2 * np.pi * self.rho_sp)
+        ) ** (
+            1.0 / 3.0
+        )  # pc
+
+        if gamma <= 1:
+            raise ValueError("gamma must be greater than 1")
+
+        if r_p > r_sp:
+            raise ValueError("annihilation plateau radius larger than spike")
+
+        self.r_p = r_p
+        self.IDstr_model = f"gamma={gamma:.2f}_rhosp={rho_sp:.1f}_rp={r_p:.2E}"
+
+        super().__init__(M_BH, M_NS, Lambda)
+
+    def f_init(self, eps):
+        def f_init(eps):
+            if G_N * self.M_BH / self.r_sp < eps and eps <= G_N * self.M_BH / self.r_p:
+                return (
+                    self.rho_sp
+                    * ((eps * self.r_sp) / (G_N * self.M_BH)) ** self.gamma
+                    * (
+                        (1 - self.gamma)
+                        * self.gamma
+                        * Beta(
+                            -1 + self.gamma, 0.5, (G_N * self.M_BH) / (eps * self.r_sp)
+                        )
+                        + (np.sqrt(np.pi) * Gamma(1 + self.gamma))
+                        / Gamma(-0.5 + self.gamma)
+                    )
+                ) / (2.0 * np.sqrt(2) * eps ** 1.5 * np.pi ** 2)
+            else:
+                return 0.0
+
+        return np.vectorize(f_init)(eps)
+
+    def rho_init(self, r):
+        def rho_init(r):
+            if r >= self.r_p:
+                return self.rho_sp * (self.r_sp / r) ** self.gamma
+            elif r < self.r_p:
+                return (
+                    self.rho_sp
+                    * (self.r_sp / self.r_p) ** self.gamma
+                    * (self.r_p / r) ** 0.5
+                )
+
+        return np.vectorize(rho_init)(r)
