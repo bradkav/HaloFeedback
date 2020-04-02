@@ -17,7 +17,7 @@ plot_dir = "plots/"
 SPEED_CUT = True
 
 # Initialise distribution function
-DF = HaloFeedback.DistributionFunction(M_BH=1000)
+DF = HaloFeedback.PowerLawSpike(M_BH=1000)
 
 # Radius position and velocity of the orbiting body
 r0 = 1e-8  # pc
@@ -289,5 +289,5 @@ print(
     DF.rho(r0, v_cut=np.sqrt(G_N * (DF.M_BH + DF.M_NS) / r0)) / rho0[r0_ind],
 )
 
-plt.show()
+plt.savefig("evolution.pdf")
 
