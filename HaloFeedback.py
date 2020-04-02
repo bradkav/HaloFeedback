@@ -34,24 +34,29 @@ def ellipeinc_alt(phi, m):
     )
 
 
-class DistributionFunction:
-    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7.0 / 3.0, rho_sp=226, Lambda=-1):
+class DistributionFunction(ABC):
+    """
+    Base class for phase space distribution of a DM spike surrounding a black
+    hole with an orbiting body. Child classes must implement the following:
+
+    Methods
+        - rho_init(): initial density function
+        - f_init() initial phase-space distribution function
+
+    Attributes
+        - r_sp: DM halo extent [pc]. Used for making grids for the calculation.
+        - IDstr_model: ID string used for file names.
+    """
+
+    def __init__(self, M_BH=1e3, M_NS=1.0, Lambda=-1):
         self.M_BH = M_BH  # Solar mass
         self.M_NS = M_NS  # Solar mass
-        self.gamma = gamma  # Slope of DM density profile
-        self.rho_sp = rho_sp  # Solar mass/pc^3
 
         if Lambda <= 0:
             self.Lambda = np.sqrt(M_BH / M_NS)
         else:
             self.Lambda = Lambda
 
-        # Spike radius and ISCO
-        self.r_sp = (
-            (3 - gamma) * (0.2 ** (3.0 - gamma)) * M_BH / (2 * np.pi * rho_sp)
-        ) ** (
-            1.0 / 3.0
-        )  # pc
         self.r_isco = 6.0 * G_N * M_BH / c ** 2
 
         # Initialise grid of r, eps and f(eps)
@@ -60,13 +65,32 @@ class DistributionFunction:
             self.r_grid, np.geomspace(1.01 * self.r_grid[-1], 1e3 * self.r_sp, 1000)
         )
         self.eps_grid = self.psi(self.r_grid)
-
-        self.f_eps = self.f_init()
+        self.f_eps = self.f_init(self.eps_grid)
 
         # Define a string which specifies the model parameters
         # and numerical parameters (for use in file names etc.)
         self.IDstr_num = "lnLambda=%.1f" % (np.log(self.Lambda),)
-        self.IDstr_model = "gamma=%.2f_rhosp=.%1f" % (gamma, rho_sp)
+
+    @abstractmethod
+    def rho_init(self, r):
+        """
+        Initial DM density of the system [MSun / pc^3].
+
+        Parameters:
+            - r : distance from center of spike [pc]
+        """
+        pass
+
+    @abstractmethod
+    def f_init(self, eps):
+        """
+        Initial phase-space distribution function.
+
+        Parameters
+            - eps : float or np.array
+            Energy per unit mass in (km/s)^2
+        """
+        pass
 
     def plotDF(self):
         plt.figure()
@@ -77,21 +101,6 @@ class DistributionFunction:
         plt.xlabel(r"$\mathcal{E} = \Psi(r) - \frac{1}{2}v^2$ [(km/s)$^2$]")
         plt.ylabel(r"$f(\mathcal{E})$ [$M_\odot$ pc$^{-3}$ (km/s)$^{-3}$]")
         plt.show()
-
-    def f_init(self):
-        A1 = self.r_sp / (G_N * self.M_BH)
-        return (
-            self.rho_sp
-            * (
-                self.gamma
-                * (self.gamma - 1)
-                * A1 ** self.gamma
-                * np.pi ** -1.5
-                / np.sqrt(8)
-            )
-            * (Gamma_func(-1 + self.gamma) / Gamma_func(-1 / 2 + self.gamma))
-            * self.eps_grid ** (-(3 / 2) + self.gamma)
-        )
 
     def psi(self, r):
         """Gravitational potential as a function of r"""
@@ -138,10 +147,6 @@ class DistributionFunction:
         )
         integ = vlist ** 4 * flist
         return np.sqrt(np.trapz(integ, vlist) / np.trapz(vlist ** 2 * flist, vlist))
-
-    def rho_init(self, r):
-        """Initial DM density of the system"""
-        return self.rho_sp * (r / self.r_sp) ** -self.gamma
 
     def TotalMass(self):
         return np.trapz(-self.P_eps(), self.eps_grid)
@@ -543,5 +548,59 @@ class DistributionFunction:
             * (self.b_90(v_orb) ** 2 / (v_orb) ** 2)
         )
         return norm * np.trapz(dE, self.eps_grid) / T_orb
+
+
+class PowerLawSpike(DistributionFunction):
+    """
+    A spike with a power law profile:
+
+        rho(r) = rho_sp * (r_sp / r)^gamma.
+
+    The parameter r_sp is defined as r_sp = 0.2 r_h, where r_h is the radius of
+    the sphere within which the DM mass is twice the central BH mass.
+
+    Notes
+    -----
+    The parameters are not properties, so r_sp will not have the correct value
+    if rho_sp or gamma are changed after initialization.
+    """
+
+    def __init__(self, M_BH=1e3, M_NS=1., gamma=7 / 3, rho_sp=226, Lambda=-1):
+        if gamma <= 1:
+            raise ValueError("gamma must be greater than 1")
+        self.M_BH = M_BH  # Solar mass
+        self.M_NS = M_NS  # Solar mass
+        self.gamma = gamma  # Slope of DM density profile
+        self.rho_sp = rho_sp  # Solar mass/pc^3
+        self.r_sp = (
+            (3 - self.gamma)
+            * (0.2 ** (3.0 - self.gamma))
+            * self.M_BH
+            / (2 * np.pi * self.rho_sp)
+        ) ** (
+            1.0 / 3.0
+        )  # pc
+
+        self.IDstr_model = f"gamma={gamma:.2f}_rhosp={rho_sp:.1f}"
+
+        super().__init__(M_BH, M_NS, Lambda)
+
+    def f_init(self, eps):
+        A1 = self.r_sp / (G_N * self.M_BH)
+        return (
+            self.rho_sp
+            * (
+                self.gamma
+                * (self.gamma - 1)
+                * A1 ** self.gamma
+                * np.pi ** -1.5
+                / np.sqrt(8)
+            )
+            * (Gamma_func(-1 + self.gamma) / Gamma_func(-1 / 2 + self.gamma))
+            * self.eps_grid ** (-(3 / 2) + self.gamma)
+        )
+
+    def rho_init(self, r):
+        return self.rho_sp * (self.r_sp / r) ** self.gamma
 
 
