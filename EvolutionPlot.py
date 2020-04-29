@@ -266,5 +266,5 @@ print("    Fractional error in energy conservation:", ((DF.TotalEnergy() - E_lis
 print("  ")
 print("    Delta rho/rho(r0):", DF.rho(r0, v_cut = np.sqrt(G_N*(DF.M_BH+DF.M_NS)/r0))/rho0[r0_ind])
 
-plt.show()
+#plt.show()
 
