@@ -9,8 +9,9 @@ import numpy as np
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.integrate import quad, simps
 from scipy.interpolate import interp1d
-from scipy.special import ellipeinc, ellipkinc
-from scipy.special import gamma as Gamma_func
+from scipy.special import ellipeinc, ellipkinc, ellipe, ellipk
+from scipy.special import gamma as Gamma
+from scipy.special import beta as Beta
 
 # ------------------
 G_N = 4.3021937e-3  # (km/s)^2 pc/M_sun
@@ -66,6 +67,11 @@ class DistributionFunction(ABC):
         )
         self.eps_grid = self.psi(self.r_grid)
         self.f_eps = self.f_init(self.eps_grid)
+
+        # Density of states
+        self.DoS = (
+            np.sqrt(2) * (np.pi * G_N * self.M_BH) ** 3 * self.eps_grid ** (-5 / 2.0)
+        )
 
         # Define a string which specifies the model parameters
         # and numerical parameters (for use in file names etc.)
@@ -154,10 +160,6 @@ class DistributionFunction(ABC):
     def TotalEnergy(self):
         return np.trapz(-self.P_eps() * self.eps_grid, self.eps_grid)
 
-    # Density of states
-    def DoS(self):
-        return np.sqrt(2) * (np.pi * G_N * self.M_BH) ** 3 * self.eps_grid ** (-5 / 2.0)
-
     def b_90(self, v_orb):
         return G_N * self.M_NS / (v_orb ** 2)
 
@@ -209,7 +211,7 @@ class DistributionFunction(ABC):
         return np.clip(f_minus, -self.f_eps, 0) + f_plus
 
     def P_delta_eps(self, v, delta_eps):
-        """1
+        """
         Calcuate PDF for delta_eps
         """
         norm = self.b_90(v) ** 2 / (self.b_max(v) ** 2 - self.b_min(v) ** 2)
@@ -338,34 +340,34 @@ class DistributionFunction(ABC):
 
         # Sum over the kicks
         for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
-            r_eps = G_N * self.M_BH / self.eps_grid
-            r_cut = G_N * self.M_BH / (self.eps_grid + 0.5 * v_cut ** 2)
-
             # Define which energies are allowed to scatter
             mask = (self.eps_grid > self.psi(r0) * (1 - b / r0) - 0.5 * v_cut ** 2) & (
                 self.eps_grid < self.psi(r0) * (1 + b / r0)
             )
 
-            L1 = np.minimum((r0 - r0 ** 2 / r_eps[mask]) / b, 0.999999)
+            r_eps = G_N * self.M_BH / self.eps_grid[mask]
+            r_cut = G_N * self.M_BH / (self.eps_grid[mask] + 0.5 * v_cut ** 2)
+
+            L1 = np.minimum((r0 - r0 ** 2 / r_eps) / b, 0.999999)
             alpha1 = np.arccos(L1)
-            L2 = np.maximum((r0 - r0 ** 2 / r_cut[mask]) / b, -0.999999)
+            L2 = np.maximum((r0 - r0 ** 2 / r_cut) / b, -0.999999)
             alpha2 = np.arccos(L2)
 
-            m = (2 * b / r0) / (1 - (r0 / r_eps[mask]) + b / r0)
+            m = (2 * b / r0) / (1 - (r0 / r_eps) + b / r0)
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
-            N1 = np.zeros(len(m))
-            N1[mask1] = ellipeinc((np.pi - alpha1[mask1]) / 2, m[mask1]) - ellipeinc(
-                (np.pi - alpha2[mask1]) / 2, m[mask1]
-            )
-            N1[mask2] = ellipeinc_alt(
-                (np.pi - alpha1[mask2]) / 2, m[mask2]
-            ) - ellipeinc_alt((np.pi - alpha2[mask2]) / 2, m[mask2])
+
+            if np.sum(mask1) > 0:
+                N1[mask1] = ellipe(m[mask1]) - ellipeinc(
+                    (np.pi - alpha2[mask1]) / 2, m[mask1]
+                )
+            if np.sum(mask2) > 0:
+                N1[mask2] = ellipeinc_alt((np.pi - alpha1[mask2]) / 2, m[mask2])
             df[mask] += (
                 -frac
                 * self.f_eps[mask]
                 * (1 + b ** 2 / self.b_90(v_orb) ** 2) ** 2
-                * np.sqrt(1 - r0 / r_eps[mask] + b / r0)
+                * np.sqrt(1 - r0 / r_eps + b / r0)
                 * N1
             )
 
@@ -378,7 +380,7 @@ class DistributionFunction(ABC):
             * r0
             * (self.b_90(v_orb) ** 2 / (v_orb) ** 2)
         )
-        return norm * df / T_orb / self.DoS()
+        return norm * df / T_orb / self.DoS
 
     def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick=1, correction=1):
         """Particles to add back into distribution function from E - dE -> E."""
@@ -413,40 +415,46 @@ class DistributionFunction(ABC):
             # Value of specific energy before the kick
             eps_old = self.eps_grid - delta_eps
 
-            r_eps = G_N * self.M_BH / eps_old
-            r_cut = G_N * self.M_BH / (eps_old + 0.5 * v_cut ** 2)
-
             # Define which energies are allowed to scatter
             mask = (eps_old > self.psi(r0) * (1 - b / r0) - 0.5 * v_cut ** 2) & (
                 eps_old < self.psi(r0) * (1 + b / r0)
             )
 
-            # Distribution of particles before they scatter
-            f_old = self.interpolate_DF(eps_old[mask], correction)
+            # Sometimes, this mask has no non-zero entries
+            if np.sum(mask) > 0:
+                r_eps = G_N * self.M_BH / eps_old[mask]
+                r_cut = G_N * self.M_BH / (eps_old[mask] + 0.5 * v_cut ** 2)
 
-            L1 = np.minimum((r0 - r0 ** 2 / r_eps[mask]) / b, 0.999999)
-            alpha1 = np.arccos(L1)
-            L2 = np.maximum((r0 - r0 ** 2 / r_cut[mask]) / b, -0.999999)
-            alpha2 = np.arccos(L2)
+                # Distribution of particles before they scatter
+                f_old = self.interpolate_DF(eps_old[mask], correction)
 
-            m = (2 * b / r0) / (1 - (r0 / r_eps[mask]) + b / r0)
-            mask1 = (m <= 1) & (alpha2 > alpha1)
-            mask2 = (m > 1) & (alpha2 > alpha1)
-            N1 = np.zeros(len(m))
-            N1[mask1] = ellipeinc((np.pi - alpha1[mask1]) / 2, m[mask1]) - ellipeinc(
-                (np.pi - alpha2[mask1]) / 2, m[mask1]
-            )
-            N1[mask2] = ellipeinc_alt(
-                (np.pi - alpha1[mask2]) / 2, m[mask2]
-            ) - ellipeinc_alt((np.pi - alpha2[mask2]) / 2, m[mask2])
+                L1 = np.minimum((r0 - r0 ** 2 / r_eps) / b, 0.999999)
 
-            df[mask] += (
-                frac
-                * f_old
-                * (1 + b ** 2 / self.b_90(v_orb) ** 2) ** 2
-                * np.sqrt(1 - r0 / r_eps[mask] + b / r0)
-                * N1
-            )
+                alpha1 = np.arccos(L1)
+                L2 = np.maximum((r0 - r0 ** 2 / r_cut) / b, -0.999999)
+                alpha2 = np.arccos(L2)
+
+                m = (2 * b / r0) / (1 - (r0 / r_eps) + b / r0)
+                mask1 = (m <= 1) & (alpha2 > alpha1)
+                mask2 = (m > 1) & (alpha2 > alpha1)
+
+                N1 = np.zeros(len(m))
+                if np.sum(mask1) > 0:
+                    N1[mask1] = ellipe(m[mask1]) - ellipeinc(
+                        (np.pi - alpha2[mask1]) / 2, m[mask1]
+                    )
+                if np.sum(mask2) > 0:
+                    N1[mask2] = ellipeinc_alt(
+                        (np.pi - alpha1[mask2]) / 2, m[mask2]
+                    )  # - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2])
+
+                df[mask] += (
+                    frac
+                    * f_old
+                    * (1 + b ** 2 / self.b_90(v_orb) ** 2) ** 2
+                    * np.sqrt(1 - r0 / r_eps + b / r0)
+                    * N1
+                )
 
         T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
         norm = (
@@ -457,7 +465,7 @@ class DistributionFunction(ABC):
             * r0
             * (self.b_90(v_orb) ** 2 / (v_orb) ** 2)
         )
-        return norm * df / T_orb / self.DoS()
+        return norm * df / T_orb / self.DoS
 
     def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=np.ones(N_GRID)):
         """Calculate carried away by particles which are completely unbound.
@@ -499,10 +507,6 @@ class DistributionFunction(ABC):
 
         # Sum over the kicks
         for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
-
-            r_eps = G_N * self.M_BH / self.eps_grid
-            r_cut = G_N * self.M_BH / (self.eps_grid + 0.5 * v_cut ** 2)
-
             # Maximum impact parameter which leads to the ejection of particles
             b_ej_sq = self.b_90(v_orb) ** 2 * ((2 * v_orb ** 2 / self.eps_grid) - 1)
 
@@ -513,31 +517,37 @@ class DistributionFunction(ABC):
                 & (b ** 2 < b_ej_sq)
             )
 
-            L1 = np.minimum((r0 - r0 ** 2 / r_eps[mask]) / b, 0.999999)
-            alpha1 = np.arccos(L1)
-            L2 = np.maximum((r0 - r0 ** 2 / r_cut[mask]) / b, -0.999999)
-            alpha2 = np.arccos(L2)
+            r_eps = G_N * self.M_BH / self.eps_grid[mask]
+            r_cut = G_N * self.M_BH / (self.eps_grid[mask] + 0.5 * v_cut ** 2)
 
-            m = (2 * b / r0) / (1 - (r0 / r_eps[mask]) + b / r0)
-            mask1 = (m <= 1) & (alpha2 > alpha1)
-            mask2 = (m > 1) & (alpha2 > alpha1)
-            N1 = np.zeros(len(m))
-            N1[mask1] = ellipeinc((np.pi - alpha1[mask1]) / 2, m[mask1]) - ellipeinc(
-                (np.pi - alpha2[mask1]) / 2, m[mask1]
-            )
-            N1[mask2] = ellipeinc_alt(
-                (np.pi - alpha1[mask2]) / 2, m[mask2]
-            ) - ellipeinc_alt((np.pi - alpha2[mask2]) / 2, m[mask2])
+            if np.sum(mask) > 0:
 
-            dE[mask] += (
-                -frac
-                * correction[mask]
-                * self.f_eps[mask]
-                * (1 + b ** 2 / self.b_90(v_orb) ** 2) ** 2
-                * np.sqrt(1 - r0 / r_eps[mask] + b / r0)
-                * N1
-                * (self.eps_grid[mask] + delta_eps)
-            )
+                L1 = np.minimum((r0 - r0 ** 2 / r_eps) / b, 0.999999)
+                alpha1 = np.arccos(L1)
+                L2 = np.maximum((r0 - r0 ** 2 / r_cut) / b, -0.999999)
+                alpha2 = np.arccos(L2)
+
+                m = (2 * b / r0) / (1 - (r0 / r_eps) + b / r0)
+                mask1 = (m <= 1) & (alpha2 > alpha1)
+                mask2 = (m > 1) & (alpha2 > alpha1)
+
+                N1 = np.zeros(len(m))
+                if np.sum(mask1) > 0:
+                    N1[mask1] = ellipe(m[mask1]) - ellipeinc(
+                        (np.pi - alpha2[mask1]) / 2, m[mask1]
+                    )
+                if np.sum(mask2) > 0:
+                    N1[mask2] = ellipeinc_alt((np.pi - alpha1[mask2]) / 2, m[mask2])
+
+                dE[mask] += (
+                    -frac
+                    * correction[mask]
+                    * self.f_eps[mask]
+                    * (1 + b ** 2 / self.b_90(v_orb) ** 2) ** 2
+                    * np.sqrt(1 - r0 / r_eps + b / r0)
+                    * N1
+                    * (self.eps_grid[mask] + delta_eps)
+                )
 
         norm = (
             2
@@ -565,7 +575,7 @@ class PowerLawSpike(DistributionFunction):
     if rho_sp or gamma are changed after initialization.
     """
 
-    def __init__(self, M_BH=1e3, M_NS=1., gamma=7 / 3, rho_sp=226, Lambda=-1):
+    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7 / 3, rho_sp=226, Lambda=-1):
         if gamma <= 1:
             raise ValueError("gamma must be greater than 1")
         self.M_BH = M_BH  # Solar mass
@@ -596,7 +606,7 @@ class PowerLawSpike(DistributionFunction):
                 * np.pi ** -1.5
                 / np.sqrt(8)
             )
-            * (Gamma_func(-1 + self.gamma) / Gamma_func(-1 / 2 + self.gamma))
+            * (Gamma(-1 + self.gamma) / Gamma(-1 / 2 + self.gamma))
             * self.eps_grid ** (-(3 / 2) + self.gamma)
         )
 
@@ -622,7 +632,7 @@ class PlateauSpike(DistributionFunction):
     if rho_sp or gamma are changed after initialization.
     """
 
-    def __init__(self, M_BH=1e3, M_NS=1., gamma=7 / 3, rho_sp=226, r_p=0.0, Lambda=-1):
+    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7 / 3, rho_sp=226, r_p=0.0, Lambda=-1):
         self.M_BH = M_BH  # Solar mass
         self.M_NS = M_NS  # Solar mass
         self.gamma = gamma  # Slope of DM density profile
