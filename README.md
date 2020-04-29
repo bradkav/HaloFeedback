@@ -1,10 +1,10 @@
 ## Halo Feedback
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3688812.svg)](https://doi.org/10.5281/zenodo.3688812) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.3688812.svg)](https://doi.org/10.5281/zenodo.3688812) [![arXiv](https://img.shields.io/badge/arXiv-2002.12811-B31B1B.svg)](https://arxiv.org/abs/2002.12811) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Code for evolving a Dark Matter minispike under the influence of a perturbing body, injecting energy through dynamical friction. 
 
-Code released alongside the arXiv pre-print "*Detecting Dark Matter around Black Holes with Gravitational Waves: Effects of dark-matter dynamics on the gravitational waveform*". See also animations at [DOI:10.6084/m9.figshare.11663676](https://doi.org/10.6084/m9.figshare.11663676).
+Code released alongside the arXiv pre-print "*Detecting Dark Matter around Black Holes with Gravitational Waves: Effects of dark-matter dynamics on the gravitational waveform*" (https://arxiv.org/abs/2002.12811). See also animations at [DOI:10.6084/m9.figshare.11663676](https://doi.org/10.6084/m9.figshare.11663676).
 
 #### Getting started
 
@@ -106,5 +106,5 @@ Or the rate of energy loss due to dynamical friction can be computed using:
 
 #### License
 
-This work is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
+This work is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
