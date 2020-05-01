@@ -53,6 +53,7 @@ class DistributionFunction(ABC):
         self.M_BH = M_BH  # Solar mass
         self.M_NS = M_NS  # Solar mass
 
+
         if Lambda <= 0:
             self.Lambda = np.sqrt(M_BH / M_NS)
         else:
@@ -250,11 +251,20 @@ class DistributionFunction(ABC):
         eps_avg = np.diff(F_avg(eps_edges)) / frac
 
         return eps_avg, frac
-
-    def dEdt_DF(self, r, v_cut=-1, average=False):
-        """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun"""
+ 
+    def dEdt_DF(self, r, v_cut = -1, average = False):
+        """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun.
+        
+        Parameters:
+            - r : radial position of the perturbing body [pc]
+            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
+                        defaults to v_max(r) (i.e. all particles)
+            - average: determine whether to average over different radii
+                        (average = False is default and should be correct).
+        
+        """
         v_orb = np.sqrt(G_N * (self.M_BH + self.M_NS) / r)
-
+        
         CoulombLog = np.log(self.Lambda)
 
         if average:
@@ -345,6 +355,7 @@ class DistributionFunction(ABC):
                 self.eps_grid < self.psi(r0) * (1 + b / r0)
             )
 
+
             r_eps = G_N * self.M_BH / self.eps_grid[mask]
             r_cut = G_N * self.M_BH / (self.eps_grid[mask] + 0.5 * v_cut ** 2)
 
@@ -357,6 +368,8 @@ class DistributionFunction(ABC):
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
 
+
+            N1 = np.zeros(len(m))
             if np.sum(mask1) > 0:
                 N1[mask1] = ellipe(m[mask1]) - ellipeinc(
                     (np.pi - alpha2[mask1]) / 2, m[mask1]
@@ -507,6 +520,7 @@ class DistributionFunction(ABC):
 
         # Sum over the kicks
         for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
+
             # Maximum impact parameter which leads to the ejection of particles
             b_ej_sq = self.b_90(v_orb) ** 2 * ((2 * v_orb ** 2 / self.eps_grid) - 1)
 

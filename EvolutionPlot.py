@@ -204,7 +204,6 @@ if SAVE_PLOTS:
         plot_dir + "Density_" + file_label + DF.IDstr_num + ".pdf", bbox_inches="tight"
     )
 
-
 # ------------------------ Density ratio -----------------
 
 plt.figure()
@@ -214,12 +213,12 @@ for i in range(N_step):
     plt.semilogx(r_list, rho_list[i, :] / rho0, alpha=0.5, color=cmap(i / N_step))
 plt.axvline(r0, linestyle="--", color="black")
 
-
 for n in [0, N_orb / 4, N_orb / 2, 3 * N_orb / 4, N_orb]:
     plt.plot(
         [0, 0], [-1, -1], "-", color=cmap(n / N_orb), label=str(int(n)) + " orbits"
     )
 plt.legend(loc="lower right")
+
 
 plt.xlabel(r"$r$ [pc]")
 if SPEED_CUT:
@@ -289,5 +288,6 @@ print(
     DF.rho(r0, v_cut=np.sqrt(G_N * (DF.M_BH + DF.M_NS) / r0)) / rho0[r0_ind],
 )
 
-plt.savefig("evolution.pdf")
+#plt.show()
+
 
