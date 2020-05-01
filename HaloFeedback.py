@@ -13,7 +13,6 @@ from scipy.special import ellipeinc, ellipkinc, ellipe, ellipk
 from scipy.special import gamma as Gamma
 from scipy.special import beta as Beta
 
-
 # ------------------
 G_N = 4.3021937e-3  # (km/s)^2 pc/M_sun
 c = 2.9979e5  # km/s
@@ -53,6 +52,7 @@ class DistributionFunction(ABC):
     def __init__(self, M_BH=1e3, M_NS=1.0, Lambda=-1):
         self.M_BH = M_BH  # Solar mass
         self.M_NS = M_NS  # Solar mass
+
 
         if Lambda <= 0:
             self.Lambda = np.sqrt(M_BH / M_NS)
@@ -251,8 +251,7 @@ class DistributionFunction(ABC):
         eps_avg = np.diff(F_avg(eps_edges)) / frac
 
         return eps_avg, frac
-        
-        
+ 
     def dEdt_DF(self, r, v_cut = -1, average = False):
         """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun.
         
@@ -356,6 +355,7 @@ class DistributionFunction(ABC):
                 self.eps_grid < self.psi(r0) * (1 + b / r0)
             )
 
+
             r_eps = G_N * self.M_BH / self.eps_grid[mask]
             r_cut = G_N * self.M_BH / (self.eps_grid[mask] + 0.5 * v_cut ** 2)
 
@@ -367,6 +367,7 @@ class DistributionFunction(ABC):
             m = (2 * b / r0) / (1 - (r0 / r_eps) + b / r0)
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
+
 
             N1 = np.zeros(len(m))
             if np.sum(mask1) > 0:
@@ -519,7 +520,7 @@ class DistributionFunction(ABC):
 
         # Sum over the kicks
         for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
-            
+
             # Maximum impact parameter which leads to the ejection of particles
             b_ej_sq = self.b_90(v_orb) ** 2 * ((2 * v_orb ** 2 / self.eps_grid) - 1)
 
