@@ -96,6 +96,7 @@ Or the rate of energy loss due to dynamical friction can be computed using:
 
 #### Updates
 
+- *05/10/2021*:  Added a `BinarySolver.py` script for solving the full system. *This is just an illustration* and uses a very simple Euler step and should not necessarily be used for 'production' calculations.
 - *26/02/2020*:  Cleanup up `PlotEvolution.py` script. Ready for initial realise alongside arXiv preprint.  
 - *02/12/2019:** Rewritten the code to do the calculation more carefully, in particular integrating over the different sizes of kick (Delta-epsilon) now conserves energy. The full integration over Delta-epsilon is now the default option (in fact, using a single average kick is no longer supported, although I might bring it back later.) Note  also that the "average = True" option for the dynamical friction calculation is now *no longer recommended*.  
  - *23/06/2019:* Added "average" option to dynamical friction calculation (allowing you to average the density over r0 - b_max < r < r0 + b_max before calculating the DF force). Energy should be conserved at the %-level or better now.  
