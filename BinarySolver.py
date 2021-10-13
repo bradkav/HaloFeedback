@@ -204,6 +204,14 @@ while integrator.successful() and (current_r > r_end):
 
     i = i+1
 
+#Correct final point to be exactly r_end (rather than < r_end)
+t_last = np.interp(r_end, r_vacuum, t_vacuum)
+f_last = 1/DF_vacuum.T_orb(r_end/pc)
+
+t_vacuum[-1] = t_last
+r_vacuum[-1] = r_end
+f_vacuum[-1] = f_last
+
 output_vac = np.column_stack((t_vacuum, r_vacuum/pc, f_vacuum))
 nameFileVacuum = output_folder + "output_vacuum.dat"
 if (OUTPUT): np.savetxt(nameFileVacuum, output_vac, header="Columns: t [s], r [pc], f_orb [Hz]")
@@ -258,6 +266,14 @@ while integrator.successful() and (current_r > r_end):
         NPeriods = NPeriods * 0.9
         
     i = i+1
+    
+#Correct final point to be exactly r_end (rather than < r_end)
+t_last = np.interp(r_end, r_static, t_static)
+f_last = 1/DF_static.T_orb(r_end/pc)
+
+t_static[-1] = t_last
+r_static[-1] = r_end
+f_static[-1] = f_last
 
 output1 = np.column_stack((t_static, r_static/pc, f_static))
 nameFileStatic = output_folder + "output_static_dress_" + IDstr + ".dat"
@@ -347,6 +363,14 @@ while integrator.successful() and (current_r > r_end):
     integrator.set_f_params(DF_current)
     
     i = i+1
+   
+#Correct final point to be exactly r_end (rather than < r_end)
+t_last = np.interp(r_end, r_dynamic, t_dynamic)
+f_last = 1/DF_dynamic.T_orb(r_end/pc)
+
+t_dynamic[-1] = t_last
+r_dynamic[-1] = r_end
+f_dynamic[-1] = f_last
    
 output2 = np.column_stack((t_dynamic, r_dynamic/pc, f_dynamic))
 nameFileDynamic = output_folder + "output_dynamic_dress_" + IDstr + ".dat"
