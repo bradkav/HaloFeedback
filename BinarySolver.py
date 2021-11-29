@@ -24,6 +24,7 @@ parser.add_argument('-gamma', '--gamma', help='slope of DM spike', type=float, d
 parser.add_argument('-r_i', '--r_i', help='Initial radius in pc', type=float, default = -1)
 parser.add_argument('-short', '--short', help='Set to 1 to finish before r_isco', type=int, default = 0)
 parser.add_argument('-dN_ini', '--dN_ini', help='Initial time-step size in orbits', type=int, default = 10)
+parser.add_argument('-dN_max', '--dN_max', help='Maximum time-step size in orbits', type=float, default = 1000.0)
 
 parser.add_argument('-IDtag', '--IDtag', help='Optional IDtag to add on the end of the file names', type=str, default="NONE")
 parser.add_argument('-verbose', '--verbose', type=int, default=1)
@@ -71,6 +72,7 @@ rhoUnits = Msun/(pc**3.)
 ############################
 
 NPeriods_ini = args.dN_ini
+dN_max = args.dN_max
 
 if (args.short > 0):
     SHORT = True
@@ -206,8 +208,6 @@ SWITCHED = False
 #print(r_isco/pc)
 #print(180.0*r_isco/pc)
 #print(DF_current.r_sp)
-
-dN_max = 1000.0
 
 while (current_r > r_end):
 
@@ -427,6 +427,7 @@ ax[1].loglog(r_dynamic, rhoeff_dynamic)
 ax[1].set_xlabel(r"$R$ [pc]")
 ax[1].set_ylabel(r"$\rho_{\mathrm{eff}, v < v_\mathrm{orb}}(R)$ [$M_\odot\,\mathrm{pc}^{-3}$]")
 
+plt.suptitle(IDstr)
 plt.tight_layout()
 
 plt.savefig(output_folder +  "Evolution_" + IDstr + ".pdf", bbox_inches='tight')
