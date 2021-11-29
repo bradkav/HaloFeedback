@@ -281,7 +281,7 @@ while (current_r > r_end):
     #print(delta_rho)
     #if (((np.abs(delta_rho) > 1e-5) or (current_r > 1e-20*pc)) and (SWITCHED == False)):
     #dN = 10
-    df1 = (2/3)*dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+    df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
     excess_list = -df1/(DF_current.f_eps + 1e-30)
     excess = np.max(excess_list[1:]) #Omit the DF at isco
     #excess_num = np.sum(excess_list > 1)
@@ -291,24 +291,24 @@ while (current_r > r_end):
             print("Too large! New value of dN = ", dN)
         dt = currentPeriod*dN
     
-        df1 = (2/3)*dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+        df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
 
     elif (excess > 1e-1):
         dN /= 1.1
         if (verbose > 2):
             print("Getting large! New value of dN = ", dN)
         dt = currentPeriod*dN
-        df1 = (2/3)*dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+        df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
         
     elif ((excess < 1e-2) and (i%100 == 0) and (i > 0) and (dN < dN_max)):
         dN *= 1.1
         if (verbose > 2):
             print("Increasing! New value of dN = ", dN)
         dt = currentPeriod*dN
-        df1 = (2/3)*dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+        df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
 
 
-    dr1 = (2/3)*dt*drdt_ode(current_t, current_r, DF_current)
+    dr1 = dt*drdt_ode(current_t, current_r, DF_current)
 
     current_r += dr1
     DF_current.f_eps += df1
@@ -319,8 +319,8 @@ while (current_r > r_end):
     dr2 = dt*drdt_ode(current_t, current_r, DF_current)
     df2 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
 
-    current_r += (9*dr2 - 5*dr1)/12
-    DF_current.f_eps += (9*df2 - 5*df1)/12
+    current_r += 0.5*(dr2 - dr1)
+    DF_current.f_eps += 0.5*(df2 - df1)
     
     """
     else:
