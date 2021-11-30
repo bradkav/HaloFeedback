@@ -281,8 +281,9 @@ while (current_r > r_end):
     #print(delta_rho)
     #if (((np.abs(delta_rho) > 1e-5) or (current_r > 1e-20*pc)) and (SWITCHED == False)):
     #dN = 10
-    df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
-    excess_list = -df1/(DF_current.f_eps + 1e-30)
+    dfdt1 = DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+    
+    excess_list = -(2/3)*dt*dfdt1/(DF_current.f_eps + 1e-30)
     excess = np.max(excess_list[1:]) #Omit the DF at isco
     #excess_num = np.sum(excess_list > 1)
     if (excess > 1):
@@ -291,36 +292,37 @@ while (current_r > r_end):
             print("Too large! New value of dN = ", dN)
         dt = currentPeriod*dN
     
-        df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+        #dfdt1 = DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
 
     elif (excess > 1e-1):
         dN /= 1.1
         if (verbose > 2):
             print("Getting large! New value of dN = ", dN)
         dt = currentPeriod*dN
-        df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+        
+        #dfdt1 = DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
         
     elif ((excess < 1e-2) and (i%100 == 0) and (i > 0) and (dN < dN_max)):
         dN *= 1.1
         if (verbose > 2):
             print("Increasing! New value of dN = ", dN)
         dt = currentPeriod*dN
-        df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+        #df1 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
 
 
-    dr1 = dt*drdt_ode(current_t, current_r, DF_current)
+    drdt1 = drdt_ode(current_t, current_r, DF_current)
 
-    current_r += dr1
-    DF_current.f_eps += df1
+    current_r += (2/3)*dt*drdt1
+    DF_current.f_eps += (2/3)*dt*dfdt1
 
     currentPeriod = DF_current.T_orb(current_r/pc)
     currentV = 2.*np.pi*current_r/currentPeriod
 
-    dr2 = dt*drdt_ode(current_t, current_r, DF_current)
-    df2 = dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
+    drdt2 = drdt_ode(current_t, current_r, DF_current)
+    dfdt2 = DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
 
-    current_r += 0.5*(dr2 - dr1)
-    DF_current.f_eps += 0.5*(df2 - df1)
+    current_r += (dt/12)*(9*drdt2 - 5*drdt1)
+    DF_current.f_eps += (dt/12)*(9*dfdt2 - 5*dfdt1)
     
     """
     else:
@@ -386,11 +388,12 @@ while (current_r > r_end):
             if (OUTPUT): np.savetxt(output_folder + "current_DF.dat", list(zip(DF_current.eps_grid, DF_current.f_eps)), header = "Distribution at step i = " + str(i) + ". Columns: E, f(E)")
             if (OUTPUT): np.savetxt(output_folder + "checkpoint.dat", [NPeriods])
             
-        
-    if (( np.abs(current_r - r_old) / current_r > 3.e-5) and (NPeriods > 2)):
-        NPeriods = np.floor(NPeriods*0.95)
-    if (( np.abs(current_r - r_old) / current_r > 3.e-5) and (NPeriods <= 2)):        
-        NPeriods = NPeriods * 0.9
+    """    
+    if (( np.abs(current_r - r_old) / current_r > 3.e-5) and (dN > 2)):
+        dN = np.floor(dN*0.95)
+    if (( np.abs(current_r - r_old) / current_r > 3.e-5) and (dN <= 2)):        
+        dN = dN * 0.9
+    """
 
     #Update the distribution function
     #Note that this is an incredibly simple Euler step. There is definitely a more refined way to do this!
