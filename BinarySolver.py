@@ -23,8 +23,8 @@ parser.add_argument('-gamma', '--gamma', help='slope of DM spike', type=float, d
 
 parser.add_argument('-r_i', '--r_i', help='Initial radius in pc', type=float, default = -1)
 parser.add_argument('-short', '--short', help='Set to 1 to finish before r_isco', type=int, default = 0)
-parser.add_argument('-dN_ini', '--dN_ini', help='Initial time-step size in orbits', type=int, default = 10)
-parser.add_argument('-dN_max', '--dN_max', help='Maximum time-step size in orbits', type=float, default = 1000.0)
+parser.add_argument('-dN_ini', '--dN_ini', help='Initial time-step size in orbits', type=int, default = 10.0)
+parser.add_argument('-dN_max', '--dN_max', help='Maximum time-step size in orbits', type=float, default = 250.0)
 
 parser.add_argument('-IDtag', '--IDtag', help='Optional IDtag to add on the end of the file names', type=str, default="NONE")
 parser.add_argument('-verbose', '--verbose', type=int, default=1)
@@ -44,6 +44,11 @@ print("> Run ID: ", IDstr)
 
 output_folder = args.outdir
 output_folder = os.path.join(output_folder, '')
+
+#Set to True in order to refine the solution at small radii (when 
+#the number of orbits per step should be O(1) or less).
+#Still in development...
+REFINE = False
 
 #Generate folder structure if needed
 OUTPUT = True
@@ -163,7 +168,7 @@ def drdt_noDM_ode(t,r):
 gamma_initial = gamma_sp
 r0_initial = r_initial
 DF_current = HaloFeedback.PowerLawSpike(gamma = gamma_initial, M_BH = M1/Msun, M_NS = M2/Msun, rho_sp = rho_sp/(Msun/pc**3.))
-f_initial = 1./DF_current.T_orb(r0_initial/pc)
+f_initial = 2./DF_current.T_orb(r0_initial/pc)
 
 
 #################################################
@@ -223,25 +228,8 @@ while (current_r > r_end):
     r_old = 1.0*current_r
     
     dt = currentPeriod*dN
-        
-    """    
-    rho0 = DF_current.rho(current_r/pc,v_cut=orbitalV(current_r/pc, DF_current)/km)
-    #df1 = (2/3)*dt*DF_current.dfdt(current_r/pc, currentV/(km), v_cut=currentV/km)
-    delta_f1 = DF_current.delta_f(current_r/pc, currentV/(km), dt, v_cut=currentV/km)
-    DF_current.f_eps += delta_f1
-    
-    rho1 = DF_current.rho(current_r/pc,v_cut=orbitalV(current_r/pc, DF_current)/km)
-    
-    DF_current.f_eps -= delta_f1
-    delta_f2 = 0.5*DF_current.delta_f(current_r/pc, currentV/(km), 2*dt, v_cut=currentV/km)
-    DF_current.f_eps += delta_f2
-    rho2 = DF_current.rho(current_r/pc,v_cut=orbitalV(current_r/pc, DF_current)/km)
-    
-    DF_current.f_eps -= delta_f2
-        
-    print((rho1 - rho0), (rho2 - rho0))
-    """
-    
+       
+    #Diagnostic plots
     if (i < -1e6):
         #print(np.trapz(DF_current.DoS*DF_current.dfdt_plus(current_r/pc, currentV/km, v_cut=currentV/km, n_kick=HaloFeedback.N_KICK), DF_current.eps_grid))
         #print(np.trapz(-DF_current.DoS*DF_current.dfdt_minus(current_r/pc, currentV/km, v_cut=currentV/km, n_kick=HaloFeedback.N_KICK), DF_current.eps_grid))
@@ -324,38 +312,13 @@ while (current_r > r_end):
     current_r += (dt/12)*(9*drdt2 - 5*drdt1)
     DF_current.f_eps += (dt/12)*(9*dfdt2 - 5*dfdt1)
     
-    """
-    else:
-        
-        SWITCHED = True
-        #print("here...")
-        if ((np.abs(delta_rho) < 1e-5) and (i%100 == 0) and (dN < 1000)):
-            dN *= 1.1
-            print("Increasing!! New value of dN = ", dN)
-            dt = currentPeriod*dN
-        
-        df1 = DF_current.delta_f(current_r/pc, currentV/(km), (2/3)*dt, v_cut=currentV/km)
-        dr1 = (2/3)*dt*drdt_ode(current_t, current_r, DF_current)
-        
-        current_r += dr1
-        DF_current.f_eps += df1
-        
-        DF_current.f_eps[0] = 1e-30
-        
-        currentPeriod = DF_current.T_orb(current_r/pc)
-        currentV = 2.*np.pi*current_r/currentPeriod
-        
-        dr2 = dt*drdt_ode(current_t, current_r, DF_current)
-        df2 = DF_current.delta_f(current_r/pc, currentV/(km), dt, v_cut=currentV/km)
-        
-        current_r += (9*dr2 - 5*dr1)/12
-        DF_current.f_eps += (9*df2 - 5*df1)/12
-    
-        DF_current.f_eps[0] = 1e-30
-    """
-
-
     current_t += dt
+
+    if (REFINE):
+        if (( np.abs(current_r - r_old) / current_r > 3.e-5) and (dN > 2)):
+            dN = np.floor(dN*0.95)
+        if (( np.abs(current_r - r_old) / current_r > 3.e-5) and (dN <= 2)):        
+            dN = dN * 0.9
     
     #In the dynamic case, we might want to print out the density profile often in
     #the early part of the evolution, for illustration purposes
@@ -366,9 +329,9 @@ while (current_r > r_end):
         #print(">    Time needed so far: %s seconds" % (time.time() - start_time))
 
         #Update the output file
-        if (verbose > 2):
+        if (verbose > 0):
             output2 = list(zip(t_dynamic, r_dynamic/pc, f_dynamic, rhoeff_dynamic))
-            nameFileDynamic = output_folder + "Trajectory_" + IDstr + ".txt.gz"
+            nameFileDynamic = output_folder + "trajectory_" + IDstr + ".txt.gz"
             if (OUTPUT): np.savetxt(nameFileDynamic, output2, header=htxt,  fmt='%.10e')
 
         if (OUTPUT_ALL):
@@ -416,17 +379,17 @@ f_dynamic[-1] = f_last
 rhoeff_dynamic[-1] = DF_current.rho(r_end*1.000001/pc,v_cut=orbitalV(r_end*1.000001/pc, DF_current)/km)
    
 output2 = np.column_stack((t_dynamic, r_dynamic/pc, f_dynamic, rhoeff_dynamic))
-nameFileDynamic = output_folder + "Trajectory_" + IDstr + ".txt.gz"
+nameFileDynamic = output_folder + "trajectory_" + IDstr + ".txt.gz"
 if (OUTPUT): np.savetxt(nameFileDynamic, output2, header=htxt,  fmt='%.10e')
 
 #Make some plots
 
 fig, ax = plt.subplots(ncols=2, nrows=1,figsize=(10, 5))
-ax[0].semilogy(t_dynamic, r_dynamic)
+ax[0].semilogy(t_dynamic, r_dynamic/pc)
 ax[0].set_xlabel(r"$t$ [s]")
 ax[0].set_ylabel(r"$R$ [pc]")
     
-ax[1].loglog(r_dynamic, rhoeff_dynamic)
+ax[1].loglog(r_dynamic/pc, rhoeff_dynamic)
 ax[1].set_xlabel(r"$R$ [pc]")
 ax[1].set_ylabel(r"$\rho_{\mathrm{eff}, v < v_\mathrm{orb}}(R)$ [$M_\odot\,\mathrm{pc}^{-3}$]")
 
