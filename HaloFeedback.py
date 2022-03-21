@@ -165,7 +165,8 @@ class DistributionFunction(ABC):
         return G_N * self.M_NS / (v_orb ** 2)
 
     def b_min(self, v_orb):
-        return 15.0 / pc_to_km
+        return 6 * G_N *self.M_NS / c**2 
+        #return 15.0 / pc_to_km
 
     def b_max(self, v_orb):
         return self.Lambda * np.sqrt(self.b_90(v_orb) ** 2 + self.b_min(v_orb) ** 2)

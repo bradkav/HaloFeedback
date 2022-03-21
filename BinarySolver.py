@@ -18,8 +18,10 @@ from matplotlib import pyplot as plt
 parser = argparse.ArgumentParser(description='...')
 parser.add_argument('-M1', '--M1', help='Larger BH mass M1 in M_sun', type=float, default=1000.)
 parser.add_argument('-M2', '--M2', help="Smalller BH mass M2 in M_sun", type=float, default = 1.0)
-parser.add_argument('-rho6', '--rho6', help='Spike density normalisation [1e16 M_sun/pc^3]', type=float, default=0.5)
+parser.add_argument('-rho6', '--rho6', help='Spike density normalisation [1e13 M_sun/pc^3]', type=float, default=0.5)
 parser.add_argument('-gamma', '--gamma', help='slope of DM spike', type=float, default=2.333)
+
+parser.add_argument('-PBH', '--PBH', help='Set to 1 in order to set the spike parameters appropriate for a PBH.', type=int, default=0)
 
 parser.add_argument('-r_i', '--r_i', help='Initial radius in pc', type=float, default = -1)
 parser.add_argument('-short', '--short', help='Set to 1 to finish before r_isco', type=int, default = 0)
@@ -35,12 +37,6 @@ parser.add_argument('-outdir', '--outdir', help='Directory where results will be
 args = parser.parse_args()
 verbose = args.verbose
 
-IDstr = "M1_%.4f_M2_%.4f_rho6_%.4f_gamma_%.4f"%(args.M1, args.M2, args.rho6, args.gamma) 
-if (args.IDtag != "NONE"):
-    IDstr += "_" + args.IDtag
-
-print("> Run ID: ", IDstr)
-
 
 output_folder = args.outdir
 output_folder = os.path.join(output_folder, '')
@@ -55,7 +51,6 @@ OUTPUT = True
 if (OUTPUT):
     if not (os.path.isdir(output_folder)):
         os.mkdir(output_folder)
-print(" ")
 
 #############################
 #### fundamental constants ##
@@ -89,6 +84,8 @@ else:
 # IMBH, spike and binary parameters ##
 ######################################
 
+
+
 M1 = args.M1*Msun #g 
 M2 = args.M2*Msun
 
@@ -96,9 +93,16 @@ M = M1 + M2
 nu = (M1*M2)/(M**2.) # symmetric mass ratio
 
 gamma_sp = args.gamma
+rho6 = args.rho6
+
+if (args.PBH > 0):
+    print("> Setting spike parameters for a PBH...")
+    gamma_sp = 9.0/4.0
+    rho6 = 1.396*(args.M1)**(3/4) #*1e13
+
 A = ((3.-gamma_sp)*(0.2**(3.0-gamma_sp))*M1/(2*np.pi))**(1.0/3.0)
 r_ref = 1e-6*pc
-rho_sp = ((args.rho6*1e16*Msun/(pc**3.))*(r_ref/A)**gamma_sp)**(1/(1-gamma_sp/3)) # cgs 
+rho_sp = ((rho6*1e13*Msun/(pc**3.))*(r_ref/A)**gamma_sp)**(1/(1-gamma_sp/3)) # cgs 
 
 #Calculate the initial radius based on projected merger time
 r_grav = G_N/(c_light**2.) * 2.* M1 #cm
@@ -109,6 +113,14 @@ r_in = 2.*r_grav
 Nyr_target = 20
 r_5yr = (5*year*4*64*G_N**3*M*M1*M2/(5*c_light**5) + r_isco**4)**(1/4)
 r_Nyr = (Nyr_target*year*4*64*G_N**3*M*M1*M2/(5*c_light**5) + r_isco**4)**(1/4)
+
+
+IDstr = "M1_%.4f_M2_%.4f_rho6_%.4f_gamma_%.4f"%(args.M1, args.M2, rho6, gamma_sp) 
+if (args.IDtag != "NONE"):
+    IDstr += "_" + args.IDtag
+
+print("> Run ID: ", IDstr)
+
 
 if (args.r_i < 0):
     #print(f"> Starting {Nyr_target} years from merger in vacuum...")
@@ -123,7 +135,7 @@ else:
     
 print("> System properties:")
 print(">    M_1, M_2 [M_sun]: ", M1/Msun, M2/Msun)
-print(">    gamma_sp, rho_6 [M_sun/pc^3]: ", gamma_sp, args.rho6*1e16)
+print(">    gamma_sp, rho_6 [M_sun/pc^3]: ", gamma_sp, rho6*1e13)
 print(">    r_i [pc]:", r_initial/pc)
 print(" ")
     
