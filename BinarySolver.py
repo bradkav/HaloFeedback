@@ -34,7 +34,7 @@ parser.add_argument('-M2', '--M2', help="Smalller BH mass M2 in M_sun", type=flo
 parser.add_argument('-rho6', '--rho6', help='Spike density normalisation [1e13 M_sun/pc^3]', type=float, default=1.0)
 parser.add_argument('-gamma', '--gamma', help='slope of DM spike', type=float, default=2.3333)
 
-parser.add_argument('-system', '--system', help='Type of system to evolve: "vacuum" [default], "static", "dynamic", "PBH"', type=str, default='vacuum')
+parser.add_argument('-system', '--system', help='Type of system to evolve: "vacuum", "static", "dynamic" [default], "PBH"', type=str, default='dynamic')
 
 parser.add_argument('-r_i', '--r_i', help='Initial radius in pc', type=float, default = -1)
 parser.add_argument('-short', '--short', help='Set to 1 to finish before r_isco', type=int, default = 0)
