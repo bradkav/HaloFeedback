@@ -9,16 +9,16 @@ import numpy as np
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.integrate import quad, simps
 from scipy.interpolate import interp1d
-from scipy.special import ellipeinc, ellipkinc, ellipe, ellipk
+from scipy.special import ellipeinc, ellipkinc, ellipe, ellipk, betainc
 from scipy.special import gamma as Gamma
 from scipy.special import beta as Beta
 
 # ------------------
 G_N = 4.3021937e-3  # (km/s)^2 pc/M_sun
-c = 2.9979e5  # km/s
+c = 2.99792458e5  # km/s
 
 # Conversion factors
-pc_to_km = 3.085677581e13
+pc_to_km = 3.08567758149137e13
 
 # Numerical parameters
 N_GRID = 10000  # Number of grid points in the specific energy
@@ -62,10 +62,11 @@ class DistributionFunction(ABC):
         self.r_isco = 6.0 * G_N * M_BH / c ** 2
 
         # Initialise grid of r, eps and f(eps)
-        self.r_grid = np.geomspace(self.r_isco, 1e5 * self.r_isco, N_GRID - 1000)
+        self.r_grid = np.geomspace(self.r_isco, 1e5 * self.r_isco, int(0.9*N_GRID))
         self.r_grid = np.append(
-            self.r_grid, np.geomspace(1.01 * self.r_grid[-1], 1e3 * self.r_sp, 1000)
+            self.r_grid, np.geomspace(1.01 * self.r_grid[-1], 1e3 * self.r_sp, int(0.1*N_GRID))
         )
+        self.r_grid = np.sort(self.r_grid)
         self.eps_grid = self.psi(self.r_grid)
         self.f_eps = self.f_init(self.eps_grid)
 
@@ -165,8 +166,9 @@ class DistributionFunction(ABC):
         return G_N * self.M_NS / (v_orb ** 2)
 
     def b_min(self, v_orb):
-        return 6 * G_N *self.M_NS / c**2 
+        #return 0.001 / pc_to_km
         #return 15.0 / pc_to_km
+        return 6 * G_N *self.M_NS / c**2 
 
     def b_max(self, v_orb):
         return self.Lambda * np.sqrt(self.b_90(v_orb) ** 2 + self.b_min(v_orb) ** 2)
@@ -176,6 +178,8 @@ class DistributionFunction(ABC):
 
     def eps_max(self, v_orb):
         return 2 * v_orb ** 2 / (1 + self.b_min(v_orb) ** 2 / self.b_90(v_orb) ** 2)
+
+
 
     def dfdt(self, r0, v_orb, v_cut=-1):
         """Time derivative of the distribution function f(eps).
@@ -187,9 +191,17 @@ class DistributionFunction(ABC):
                         defaults to v_max(r) (i.e. all particles)
         """
 
-        return self.dfdt_minus(r0, v_orb, v_cut, N_KICK) + self.dfdt_plus(
-            r0, v_orb, v_cut, N_KICK
-        )
+        f_minus = self.dfdt_minus(r0, v_orb, v_cut, N_KICK)
+        f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK)
+
+        #N_plus = np.trapz(self.DoS*f_plus, self.eps_grid)
+        #N_minus = np.trapz(-self.DoS*f_minus, self.eps_grid)
+        
+        N_plus = 1
+        N_minus = 1
+        #print(N_minus, N_plus)
+
+        return f_minus + (N_minus/N_plus)*f_plus
 
     def delta_f(self, r0, v_orb, dt, v_cut=-1):
         """Change in f over a time-step dt.
@@ -207,10 +219,12 @@ class DistributionFunction(ABC):
 
         # Don't remove more particles than there are particles...
         correction = np.clip(self.f_eps / (-f_minus + 1e-50), 0, 1)
-
+        
+        f_minus = np.clip(f_minus, -self.f_eps, 0)
         f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK, correction) * dt
 
-        return np.clip(f_minus, -self.f_eps, 0) + f_plus
+
+        return f_minus + f_plus
 
     def P_delta_eps(self, v, delta_eps):
         """
@@ -323,7 +337,7 @@ class DistributionFunction(ABC):
     # ----- df/dt      ----
     # ---------------------
 
-    def dfdt_minus(self, r0, v_orb, v_cut=-1, n_kick=1):
+    def dfdt_minus(self, r0, v_orb, v_cut=-1, n_kick=N_KICK):
         """Particles to remove from the distribution function at energy E."""
         if v_cut < 0:
             v_cut = self.v_max(r0)
@@ -394,9 +408,11 @@ class DistributionFunction(ABC):
             * r0
             * (self.b_90(v_orb) ** 2 / (v_orb) ** 2)
         )
-        return norm * df / T_orb / self.DoS
+        result = norm * df / T_orb / self.DoS
+        result[self.eps_grid >= 0.9999*self.psi(self.r_isco)] *= 0
+        return result
 
-    def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick=1, correction=1):
+    def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=1):
         """Particles to add back into distribution function from E - dE -> E."""
         if v_cut < 0:
             v_cut = self.v_max(r0)
@@ -479,7 +495,9 @@ class DistributionFunction(ABC):
             * r0
             * (self.b_90(v_orb) ** 2 / (v_orb) ** 2)
         )
-        return norm * df / T_orb / self.DoS
+        result = norm * df / T_orb / self.DoS
+        result[self.eps_grid >= 0.9999*self.psi(self.r_isco)] *= 0
+        return result
 
     def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=np.ones(N_GRID)):
         """Calculate carried away by particles which are completely unbound.
@@ -607,6 +625,8 @@ class PowerLawSpike(DistributionFunction):
         )  # pc
 
         self.IDstr_model = f"gamma={gamma:.2f}_rhosp={rho_sp:.1f}"
+
+        self.xi_init = 1 - betainc(gamma - 1 / 2, 3 / 2, 1 / 2)
 
         super().__init__(M_BH, M_NS, Lambda)
 
