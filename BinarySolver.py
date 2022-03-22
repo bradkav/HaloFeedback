@@ -50,11 +50,6 @@ parser.add_argument('-IDtag', '--IDtag', help='Optional IDtag to add on the end 
 args = parser.parse_args()
 verbose = args.verbose
 
-IDstr = "M1_%.4f_M2_%.4f_rho6_%.4f_gamma_%.4f"%(args.M1, args.M2, args.rho6, args.gamma) 
-if (args.IDtag != "NONE"):
-    IDstr += "_" + args.IDtag
-
-print("> Run ID: ", IDstr)
 
 output_folder = args.outdir
 output_folder = os.path.join(output_folder, '')
@@ -95,7 +90,7 @@ rho_6 = args.rho6*1e13*Msun/pc**3
 if (system == 'pbh'):
     print("> Setting spike parameters for a PBH...")
     gamma_sp = 9.0/4.0
-    rho6 = 1.396e13*(args.M1)**(3/4)*Msun/pc**3
+    rho_6 = 1.396e13*(M1/Msun)**(3/4)*Msun/pc**3
 
 m_tilde = ((3.-gamma_sp)*(0.2**(3.0-gamma_sp))*M1/(2*np.pi))
 r_6 = 1e-6*pc
@@ -132,8 +127,15 @@ f_initial  = calc_f(r0_initial)
     
 print("> System properties:")
 print(">    M_1, M_2 [M_sun]: ", M1/Msun, M2/Msun)
-print(">    gamma_sp, rho_6 [M_sun/pc^3]: ", gamma_sp, rho_6/(Msun/pc**3))
+print(">    gamma_sp, rho_6 [1e13 M_sun/pc^3]: ", gamma_sp, rho_6/(1e13*Msun/pc**3))
 print(">    r_i [pc]:", r0_initial/pc)
+print(" ")
+
+IDstr = "M1_%.4f_M2_%.4f_rho6_%.4f_gamma_%.4f"%(args.M1, args.M2, rho_6/(1e13*Msun/pc**3), gamma_sp) 
+if (args.IDtag != "NONE"):
+    IDstr += "_" + args.IDtag
+
+print("> Run ID: ", IDstr)
 print(" ")
         
 
