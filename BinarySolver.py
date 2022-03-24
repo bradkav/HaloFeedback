@@ -34,7 +34,7 @@ parser.add_argument('-M2', '--M2', help="Smalller BH mass M2 in M_sun", type=flo
 parser.add_argument('-rho6', '--rho6', help='Spike density normalisation [1e13 M_sun/pc^3]', type=float, default=1.0)
 parser.add_argument('-gamma', '--gamma', help='slope of DM spike', type=float, default=2.3333)
 
-parser.add_argument('-system', '--system', help='Type of system to evolve: "vacuum", "static", "dynamic" [default], "PBH"', type=str, default='dynamic')
+parser.add_argument('-system', '--system', help='Type of system to evolve: "vacuum", "static", "dynamic" [default], "PBH", "refine"', type=str, default='dynamic')
 
 parser.add_argument('-r_i', '--r_i', help='Initial radius in pc', type=float, default = -1)
 parser.add_argument('-short', '--short', help='Set to 1 to finish before r_isco', type=int, default = 0)
@@ -121,23 +121,43 @@ def calc_vorb(r):
 
 #Initial values of a few different parameters
 r0_initial = args.r_i*pc
-if (system != "vacuum"):
+if (system not in  ["vacuum", "refine"]):
     dist = HaloFeedback.PowerLawSpike(gamma = gamma_sp, M_BH = M1/Msun, M_NS = M2/Msun, rho_sp = rho_sp/(Msun/pc**3.))
-f_initial  = calc_f(r0_initial)
+
     
-print("> System properties:")
-print(">    M_1, M_2 [M_sun]: ", M1/Msun, M2/Msun)
-print(">    gamma_sp, rho_6 [1e13 M_sun/pc^3]: ", gamma_sp, rho_6/(1e13*Msun/pc**3))
-print(">    r_i [pc]:", r0_initial/pc)
-print(" ")
 
 IDstr = "M1_%.4f_M2_%.4f_rho6_%.4f_gamma_%.4f"%(args.M1, args.M2, rho_6/(1e13*Msun/pc**3), gamma_sp) 
 if (args.IDtag != "NONE"):
     IDstr += "_" + args.IDtag
 
+if (system == "refine"):    
+    print("> Refining using effective density profile...")
+    fname = output_folder + "trajectory_" + IDstr + ".txt.gz"
+    _t, _r, _f, _rhoeff = np.loadtxt(fname, unpack=True)
+    
+    r0_initial = _r[0]*pc
+    
+    inds = np.argsort(_r)
+    _r = _r[inds]
+    _rhoeff = _rhoeff[inds]
+    
+    def rhoeff_interp(r):
+        return np.interp(r, _r, _rhoeff)
+        
+    
+    
+    IDstr += "_refine"
+
+f_initial  = calc_f(r0_initial)
+
 print("> Run ID: ", IDstr)
 print(" ")
-        
+
+print("> System properties:")
+print(">    M_1, M_2 [M_sun]: ", M1/Msun, M2/Msun)
+print(">    gamma_sp, rho_6 [1e13 M_sun/pc^3]: ", gamma_sp, rho_6/(1e13*Msun/pc**3))
+print(">    r_i [pc]:", r0_initial/pc)
+print(" ")        
 
 ################################
 ##### Equations of motion ######
@@ -152,6 +172,8 @@ def get_density(r):
     elif (system in ["dynamic", "pbh"]):
         v_orb = calc_vorb(r)
         rho_xi = dist.rho(r/pc, v_cut=v_orb/(km/s))
+    elif (system == "refine"):
+        rho_xi = rhoeff_interp(r/pc)
     return rho_xi*Msun/pc**3
 
 # Radiation reaction
@@ -176,6 +198,7 @@ def drdt_ode(t, r):
         DF = DF_term(t, r)
     #print(DF/GW)
     return GW + DF
+    
     
 def save_trajectory():
     htxt = 'Columns: t [s], r [pc], f_GW [Hz], rho_eff (< v_orb) [Msun/pc^3]'
