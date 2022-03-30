@@ -12,42 +12,24 @@ See the example notebook [`Example.ipynb`](https://github.com/bradkav/HaloFeedba
 
 #### Usage
 
-The main functionality of the code is through the function `dfdt`, which calculates the time derivative of the distribution function over a grid of energies Epsilon.
+The main functionality of the code is through the function `df`, which calculates the change of the distribution function over a grid of energies Epsilon.
 
 ```python
-    def dfdt(self, r0, v_orb, v_cut=-1):
-    """
-        Time derivative of the distribution function f(eps).
-        
-        Parameters:
-            - r0 : radial position of the perturbing body [pc]
-            - v_orb: orbital velocity of the pertubing body [km/s]
-            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
-                        defaults to v_max(r) (i.e. all particles)
-    """
-```
+    def df(self, r0, v_orb, v_cut = -1):
+    """The change of the distribution function f(eps) during an orbit.
 
-An alternative implementation `delta_f` computes the change in the distribution function over a timestep `dt`. This behaves better under large timesteps as it prevents the distribution function going negative.
-
-```python
-    def delta_f(self, r0, v_orb, dt, v_cut=-1):
-        """Change in f over a time-step dt.
-        Automatically prevents f_eps going below zero.       
-        
         Parameters:
-            - r0 : radial position of the perturbing body [pc]
-            - v_orb: orbital velocity [km/s]
-            - dt: time-step [s]
-            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
-                        defaults to v_max(r) (i.e. all particles)
+            - r2 : the radial position [pc] of the perturbing body.
+            - v_orb : the orbital velocity [km/s] of the perturbing body.
+            - v_cut :(optional), only scatter with particles slower than v_cut [km/s]
+                    defaults to v_max(r) (i.e. all particles).
         """
-
 ```
 
 The code also allows you to calculate the rate at which energy is carried away from the system. Particles which receive a 'kick' in energy that unbinds them (Epsilon < 0) are no longer tracked by the code, so this function allows you to calculate how much energy is being carried away by these particles are each timestep, in order to check energy conservation.
 
 ```python
-    def dEdt_ej(self, r0, v_orb, v_cut=-1):
+    def dEdt_ej(self, r0, v_orb, v_cut = -1):
     """
         Calculate carried away by particles which are completely unbound.
         
@@ -65,7 +47,7 @@ At any time during the simulation, the density of DM at a given radius can be ex
 
 ```python
 
-    def rho(self, r, v_cut=-1):
+    def rho(self, r, v_cut = -1):
     """
         DM mass density computed from f(eps).
         
@@ -96,8 +78,9 @@ Or the rate of energy loss due to dynamical friction can be computed using:
 
 #### Updates
 
-- *05/10/2021*:  Added a `BinarySolver.py` script for solving the full system. *This is just an illustration* and uses a very simple Euler step and should not necessarily be used for 'production' calculations.
-- *26/02/2020*:  Cleanup up `PlotEvolution.py` script. Ready for initial realise alongside arXiv preprint.  
+- *30/03/2022*: Added more utility functions, documentation and some changes for uniformity.
+- *05/10/2021*: Added a `BinarySolver.py` script for solving the full system. *This is just an illustration* and uses a very simple Euler step and should not necessarily be used for 'production' calculations.
+- *26/02/2020*: Cleanup up `PlotEvolution.py` script. Ready for initial realise alongside arXiv preprint.  
 - *02/12/2019:* Rewritten the code to do the calculation more carefully, in particular integrating over the different sizes of kick (Delta-epsilon) now conserves energy. The full integration over Delta-epsilon is now the default option (in fact, using a single average kick is no longer supported, although I might bring it back later.) Note  also that the "average = True" option for the dynamical friction calculation is now *no longer recommended*.  
  - *23/06/2019:* Added "average" option to dynamical friction calculation (allowing you to average the density over r0 - b_max < r < r0 + b_max before calculating the DF force). Energy should be conserved at the %-level or better now.  
  - *20/06/2019:* I've now added a new method, which does the calculation a bit more carefully - unfortunately we're still not conserving energy :(  
