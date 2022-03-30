@@ -1,15 +1,12 @@
 # HaloFeedback
-import time
 import warnings
 from abc import ABC, abstractmethod
-from time import time as timeit
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from scipy.integrate import quad, simps
-from scipy.interpolate import interp1d
-from scipy.special import ellipeinc, ellipkinc, ellipe, ellipk, betainc
+
+from scipy.integrate import simpson
+from scipy.special import ellipeinc, ellipkinc, ellipe, betainc
 from scipy.special import gamma as Gamma
 from scipy.special import beta as Beta
 
@@ -65,7 +62,7 @@ class DistributionFunction(ABC):
 
         # Density of states
         self.DoS = (
-            np.sqrt(2) * (np.pi * G_N * self.m1) ** 3 * self.eps_grid ** (-5 / 2.0)
+            np.sqrt(2) * (np.pi * G_N * self.m1) ** 3 * self.eps_grid ** (-5/2)
         )
 
         # Define a string which specifies the model parameters
@@ -133,7 +130,7 @@ class DistributionFunction(ABC):
             left = 0, right = 0,
         )
         integ = vlist ** 2 * flist
-        return 4 * np.pi *simps(integ, vlist) # [M_sun/pc^3]
+        return 4 * np.pi *simpson(integ, vlist) # [M_sun/pc^3]
 
     def averageVelocity(self, r: float) -> float:
         """ Returns the local average velocity [km/s] <u> from the velocity distribution of the
@@ -188,18 +185,18 @@ class DistributionFunction(ABC):
 
     def totalMass(self) -> float:
         """ The total mass of dark matter particles in the halo. """
-        return simps(-self.P_eps(), self.eps_grid)
+        return simpson(-self.P_eps(), self.eps_grid)
 
     def totalEnergy(self) -> float:
         """ The total energy of the dark matter halo. """
-        return simps(-self.P_eps() * self.eps_grid, self.eps_grid)
+        return simpson(-self.P_eps() * self.eps_grid, self.eps_grid)
 
     def b_90(self, r2: float, Delta_u: float) -> float:
         """ The impact parameter [pc] at which dark matter particles are deflected at a 90 degree angle.
             Delta_u relative velocity of the orbiting body and dark matter particles, usually set at u_orb
             of the companion object m2.
         """
-        return G_N * self.m2 / (Delta_u ** 2) # [pc]
+        return G_N *(self.m2 +self.mDM) / (Delta_u ** 2) # [pc]
 
     def b_min(self, r2: float, v_orb: float) -> float:
         """ The minimum impact parameter [pc] is the radius of the companion m2. """
@@ -239,30 +236,39 @@ class DistributionFunction(ABC):
         return 2 * v_orb ** 2 / (1 + self.b_min(r2, v_orb) ** 2 / self.b_90(r2, v_orb) ** 2)
 
 
+    def df(self, r2: float, v_orb: float, v_cut: float = -1) -> np.array:
+        """The change of the distribution function f(eps) during an orbit.
 
-    def dfdt(self, r0, v_orb, v_cut=-1):
+        Parameters:
+            - r2 is the radial position [pc] of the perturbing body.
+            - v_orb is the orbital velocity [km/s] of the perturbing body.
+            - v_cut (optional), only scatter with particles slower than v_cut [km/s]
+                    defaults to v_max(r) (i.e. all particles).
+        """
+        
+        df_minus = self.df_minus(r2, v_orb, v_cut, N_KICK)
+        df_plus = self.df_plus(r2, v_orb, v_cut, N_KICK)
+        
+        # TODO: What is this meant for?
+        N_plus = 1 # np.trapz(self.DoS*f_plus, self.eps_grid)
+        N_minus = 1 # np.trapz(-self.DoS*f_minus, self.eps_grid)
+        
+        return df_minus + df_plus *(N_minus/N_plus)
+    
+    def dfdt(self, r2: float, v_orb: float, v_cut: float = -1) -> np.array:
         """Time derivative of the distribution function f(eps).
 
         Parameters:
-            - r0 : radial position of the perturbing body [pc]
-            - v_orb: orbital velocity of the perturbing body [km/s]
-            - v_cut: optional, only scatter with particles slower than v_cut [km/s]
-                        defaults to v_max(r) (i.e. all particles)
+            - r2 is the radial position [pc] of the perturbing body.
+            - v_orb is the orbital velocity [km/s] of the perturbing body.
+            - v_cut (optional), only scatter with particles slower than v_cut [km/s]
+                    defaults to v_max(r) (i.e. all particles).
         """
-
-        f_minus = self.dfdt_minus(r0, v_orb, v_cut, N_KICK)
-        f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK)
-
-        #N_plus = np.trapz(self.DoS*f_plus, self.eps_grid)
-        #N_minus = np.trapz(-self.DoS*f_minus, self.eps_grid)
+        T_orb = self.T_orb(r2) # [s]
         
-        N_plus = 1
-        N_minus = 1
-        #print(N_minus, N_plus)
+        return self.df(r2, v_orb, v_cut) /T_orb
 
-        return f_minus + (N_minus/N_plus)*f_plus
-
-    def delta_f(self, r0, v_orb, dt, v_cut=-1):
+    def delta_f(self, r0: float, v_orb: float, dt: float, v_cut: float = -1) -> np.array:
         """[Deprecated] This shouldn't be used in new applications. TODO: Remove?
         
         Change in f over a time-step dt where it is automatically
@@ -387,8 +393,9 @@ class DistributionFunction(ABC):
     # ----- df/dt      ----
     # ---------------------
 
-    def dfdt_minus(self, r0, v_orb, v_cut=-1, n_kick=N_KICK):
-        """Particles to remove from the distribution function at energy E."""
+    def df_minus(self, r0: float, v_orb: float, v_cut: float = -1, n_kick: int = 1) -> np.array:
+        """Particles to remove from the distribution function at energy E. """
+        
         if v_cut < 0: v_cut = self.v_max(r0)
 
         df = np.zeros(N_GRID)
@@ -448,7 +455,6 @@ class DistributionFunction(ABC):
                 * N1
             )
 
-        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
         norm = (
             2
             * np.sqrt(2 * (self.psi(r0)))
@@ -457,16 +463,15 @@ class DistributionFunction(ABC):
             * r0
             * (self.b_90(r0, v_orb) ** 2 / (v_orb) ** 2)
         )
-        result = norm * df / T_orb / self.DoS
-        result[self.eps_grid >= 0.9999*self.psi(self.r_isco)] *= 0
+        result = norm * df / self.DoS
+        result[self.eps_grid >= 0.9999 *self.psi(self.r_isco)] *= 0
+        
         return result
 
-    def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=1):
-        """Particles to add back into distribution function from E - dE -> E."""
-        if v_cut < 0:
-            v_cut = self.v_max(r0)
-
-        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
+    def df_plus(self, r0: float, v_orb: float, v_cut: float = -1, n_kick: int = 1, correction = 1) -> np.array:
+        """Particles to add back into distribution function from E - dE -> E. """
+        
+        if v_cut < 0: v_cut = self.v_max(r0)
 
         df = np.zeros(N_GRID)
 
@@ -534,8 +539,6 @@ class DistributionFunction(ABC):
                     * np.sqrt(1 - r0 / r_eps + b / r0)
                     * N1
                 )
-
-        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
         norm = (
             2
             * np.sqrt(2 * (self.psi(r0)))
@@ -544,11 +547,12 @@ class DistributionFunction(ABC):
             * r0
             * (self.b_90(r0, v_orb) ** 2 / (v_orb) ** 2)
         )
-        result = norm * df / T_orb / self.DoS
-        result[self.eps_grid >= 0.9999*self.psi(self.r_isco)] *= 0
+        result = norm * df / self.DoS
+        result[self.eps_grid >= 0.9999 *self.psi(self.r_isco)] *= 0
+        
         return result
 
-    def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=np.ones(N_GRID)):
+    def dEdt_ej(self, r0: float, v_orb: float, v_cut: float = -1, n_kick: int = N_KICK, correction = np.ones(N_GRID)):
         """Calculate carried away by particles which are completely unbound.
 
         Parameters:
@@ -677,7 +681,7 @@ class PowerLawSpike(DistributionFunction):
 
         self.xi_init = 1 - betainc(gamma - 1 / 2, 3 / 2, 1 / 2)
 
-        super().__init__(m1, m2, Lambda)
+        super().__init__(m1, m2, mDM)
 
     def f_init(self, eps):
         A1 = self.r_sp / (G_N * self.m1)
@@ -739,7 +743,7 @@ class PlateauSpike(DistributionFunction):
         self.r_p = r_p
         self.IDstr_model = f"gamma={gamma:.2f}_rhosp={rho_sp:.1f}_rp={r_p:.2E}"
 
-        super().__init__(m1, m2)
+        super().__init__(m1, m2, mDM)
 
     def f_init(self, eps):
         def f_init(eps):
