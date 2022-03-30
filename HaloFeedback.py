@@ -289,18 +289,19 @@ class DistributionFunction(ABC):
 
         return eps_avg, frac
  
-    def dEdt_DF(self, r: float, v_cut: float = -1, average: bool = False) -> float:
+    def dEdt_DF(self, r: float, v_orb: float = -1, v_cut: float = -1, average: bool = False) -> float:
         """Rate of change of energy due to DF (km/s)^2 s^-1 M_sun.
         
         Parameters:
             - r is the radial position of the perturbing body [pc]
+            - v_orb the velocity [km/s] of the body, when not given assume circular Keplerian orbits.
             - v_cut (optional), only scatter with particles slower than v_cut [km/s]
                         defaults to v_max(r) (i.e. all particles)
             - average determines whether to average over different radii
                         (average = False is default and should be correct).
         
         """
-        v_orb = np.sqrt(G_N * (self.m1 + self.m2) / r)
+        if v_orb < 0: v_orb = np.sqrt(G_N * (self.m1 + self.m2) / r) # [km/s]
 
         if average:
             warnings.warn(
@@ -364,7 +365,7 @@ class DistributionFunction(ABC):
             frac_list = (1,)
         else:
             b_list = np.geomspace(self.b_min(r0, v_orb), self.b_max(r0, v_orb), n_kick)
-            delta_eps_list = self.delta_eps_of_b(v_orb, b_list)
+            delta_eps_list = self.delta_eps_of_b(r0, v_orb, b_list)
 
             # Step size for trapezoidal integration
             step = delta_eps_list[1:] - delta_eps_list[:-1]
@@ -372,7 +373,7 @@ class DistributionFunction(ABC):
             step = np.append(0, step)
 
             # Make sure that the integral is normalised correctly
-            renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+            renorm = np.trapz(self.P_delta_eps(r0, v_orb, delta_eps_list), delta_eps_list)
             frac_list = 0.5 * (step[:-1] + step[1:]) / renorm
 
         # Sum over the kicks
@@ -441,7 +442,7 @@ class DistributionFunction(ABC):
             frac_list = (1,)
         else:
             b_list = np.geomspace(self.b_min(r0, v_orb), self.b_max(r0, v_orb), n_kick)
-            delta_eps_list = self.delta_eps_of_b(v_orb, b_list)
+            delta_eps_list = self.delta_eps_of_b(r0, v_orb, b_list)
 
             # Step size for trapezoidal integration
             step = delta_eps_list[1:] - delta_eps_list[:-1]
@@ -449,7 +450,7 @@ class DistributionFunction(ABC):
             step = np.append(0, step)
 
             # Make sure that the integral is normalised correctly
-            renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+            renorm = np.trapz(self.P_delta_eps(r0, v_orb, delta_eps_list), delta_eps_list)
             frac_list = 0.5 * (step[:-1] + step[1:]) / renorm
 
         # Sum over the kicks
@@ -537,7 +538,7 @@ class DistributionFunction(ABC):
 
         else:
             b_list = np.geomspace(self.b_min(r0, v_orb), self.b_max(r0, v_orb), n_kick)
-            delta_eps_list = self.delta_eps_of_b(v_orb, b_list)
+            delta_eps_list = self.delta_eps_of_b(r0, v_orb, b_list)
 
             # Step size for trapezoidal integration
             step = delta_eps_list[1:] - delta_eps_list[:-1]
@@ -545,7 +546,7 @@ class DistributionFunction(ABC):
             step = np.append(0, step)
 
             # Make sure that the integral is normalised correctly
-            renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+            renorm = np.trapz(self.P_delta_eps(r0, v_orb, delta_eps_list), delta_eps_list)
             frac_list = 0.5 * (step[:-1] + step[1:]) / renorm
 
         # Sum over the kicks
