@@ -135,20 +135,56 @@ class DistributionFunction(ABC):
         integ = vlist ** 2 * flist
         return 4 * np.pi *simps(integ, vlist) # [M_sun/pc^3]
 
-    def sigma_v(self, r):
+    def averageVelocity(self, r: float) -> float:
+        """ Returns the local average velocity [km/s] <u> from the velocity distribution of the
+        dark matter particles at position r [pc] from the halo center.
+        """
         v_cut = self.v_max(r)
 
+        # Interpolate the integrand onto the new array vlist.
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut ** 2, 250))
-        flist = np.interp(
-            self.psi(r) - 0.5 * vlist ** 2,
-            self.eps_grid[::-1],
-            self.f_eps[::-1],
-            left=0,
-            right=0,
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
+        flist = np.interp(self.psi(r) -0.5 *vlist **2,
+            self.eps_grid[::-1], self.f_eps[::-1],
+            left = 0, right = 0,
         )
+        
+        integ = vlist ** 3 * flist
+        return np.sqrt(np.trapz(integ, vlist) / np.trapz(vlist ** 2 * flist, vlist)) # [km/s]
+    
+    def averageSquaredVelocity(self, r: float) -> float:
+        """ Returns the local average squared velocity [km/s] <u^2> (or root mean squared velocity) from the velocity distribution of the
+        dark matter particles at position r [pc] from the halo center.
+        """
+        v_cut = self.v_max(r)
+
+        # Interpolate the integrand onto the new array vlist.
+        v_cut = np.clip(v_cut, 0, self.v_max(r))
+        vlist = np.sqrt(np.linspace(0, v_cut**2, 250))
+        flist = np.interp(self.psi(r) -0.5 *vlist **2,
+            self.eps_grid[::-1], self.f_eps[::-1],
+            left = 0, right = 0,
+        )
+        
         integ = vlist ** 4 * flist
-        return np.sqrt(np.trapz(integ, vlist) / np.trapz(vlist ** 2 * flist, vlist))
+        return np.sqrt(np.trapz(integ, vlist) / np.trapz(vlist ** 2 * flist, vlist)) # [km/s]
+
+    def velocityDispersion(self, r: float) -> float:
+        """ Returns the local velocity dispersion [km/s] from the velocity distribution of the dark matter
+        particles at position r [pc] from the halo center.
+        """
+        u2 = self.averageSquaredVelocity(r)
+        u = self.averageSquaredVelocity(r)
+        
+        return np.sqrt(u2 -u**2) # [km/s]
+    
+    def m(self) -> float:
+        """ The total mass [M_sun] of the binary system. """
+        return self.m1 +self.m2 # [M_sun]
+    
+    def mu(self) -> float:
+        """ The reduced mass [M_sun] of the binary system. """
+        return self.m1 *self.m2 /self.m() # [M_sun]
 
     def totalMass(self) -> float:
         """ The total mass of dark matter particles in the halo. """
