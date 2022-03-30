@@ -14,15 +14,15 @@ from scipy.special import gamma as Gamma
 from scipy.special import beta as Beta
 
 # ------------------
-G_N = 4.3021937e-3  # (km/s)^2 pc/M_sun
-c = 2.99792458e5  # km/s
+G_N = 4.300905557082141e-3  # [(km/s)^2 pc/M_sun] [Legacy: 4.3021937e-3]
+c = 299792.458 # [km/s] [Legacy: 2.9979e5]
 
 # Conversion factors
-pc_to_km = 3.08567758149137e13
+pc_to_km = 3.085677581491367e13 # [km] [Legacy: 3.085677581e13]
 
 # Numerical parameters
-N_GRID = 10000  # Number of grid points in the specific energy
-N_KICK = 50  # Number of points to use for integration over Delta-epsilon
+N_GRID = 10000  # Number of grid points in the specific energy.
+N_KICK = 50  # Number of points to use for integration over Delta-epsilon. [Legacy: 50]
 
 float_2eps = 2.0 * np.finfo(float).eps
 # ------------------
