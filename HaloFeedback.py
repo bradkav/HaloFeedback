@@ -434,11 +434,11 @@ class DistributionFunction(ABC):
 
 
             N1 = np.zeros(len(m))
-            if np.sum(mask1) > 0:
+            if np.any(mask1):
                 N1[mask1] = ellipe(m[mask1]) - ellipeinc(
                     (np.pi - alpha2[mask1]) / 2, m[mask1]
                 )
-            if np.sum(mask2) > 0:
+            if np.any(mask2):
                 N1[mask2] = ellipeinc_alt((np.pi - alpha1[mask2]) / 2, m[mask2])
             df[mask] += (
                 -frac
@@ -500,7 +500,7 @@ class DistributionFunction(ABC):
             )
 
             # Sometimes, this mask has no non-zero entries
-            if np.sum(mask) > 0:
+            if np.any(mask):
                 r_eps = G_N * self.m1 / eps_old[mask]
                 r_cut = G_N * self.m1 / (eps_old[mask] + 0.5 * v_cut ** 2)
 
@@ -518,11 +518,11 @@ class DistributionFunction(ABC):
                 mask2 = (m > 1) & (alpha2 > alpha1)
 
                 N1 = np.zeros(len(m))
-                if np.sum(mask1) > 0:
+                if np.any(mask1):
                     N1[mask1] = ellipe(m[mask1]) - ellipeinc(
                         (np.pi - alpha2[mask1]) / 2, m[mask1]
                     )
-                if np.sum(mask2) > 0:
+                if np.any(mask2):
                     N1[mask2] = ellipeinc_alt(
                         (np.pi - alpha1[mask2]) / 2, m[mask2]
                     )  # - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2])
@@ -601,7 +601,7 @@ class DistributionFunction(ABC):
             r_eps = G_N * self.m1 / self.eps_grid[mask]
             r_cut = G_N * self.m1 / (self.eps_grid[mask] + 0.5 * v_cut ** 2)
 
-            if np.sum(mask) > 0:
+            if np.any(mask):
 
                 L1 = np.minimum((r0 - r0 ** 2 / r_eps) / b, 0.999999)
                 alpha1 = np.arccos(L1)
@@ -613,11 +613,11 @@ class DistributionFunction(ABC):
                 mask2 = (m > 1) & (alpha2 > alpha1)
 
                 N1 = np.zeros(len(m))
-                if np.sum(mask1) > 0:
+                if np.any(mask1):
                     N1[mask1] = ellipe(m[mask1]) - ellipeinc(
                         (np.pi - alpha2[mask1]) / 2, m[mask1]
                     )
-                if np.sum(mask2) > 0:
+                if np.any(mask2):
                     N1[mask2] = ellipeinc_alt((np.pi - alpha1[mask2]) / 2, m[mask2])
 
                 dE[mask] += (
