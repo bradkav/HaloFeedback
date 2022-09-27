@@ -114,6 +114,10 @@ class DistributionFunction(ABC):
         """Gravitational potential as a function of r"""
         return G_N * self.M_BH / r
 
+    def v_circ(self, r):
+        """Circular velocity as a function of r"""
+        return np.sqrt(self.psi(r))
+        
     def v_max(self, r):
         """Maximum velocity as a function of r"""
         return np.sqrt(2 * self.psi(r))
@@ -499,8 +503,98 @@ class DistributionFunction(ABC):
         result[self.eps_grid >= 0.9999*self.psi(self.r_isco)] *= 0
         return result
 
+    def dMdtdE_ej(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=np.ones(N_GRID)):
+        """Particles to add back into distribution function from E - dE -> E."""
+        if v_cut < 0:
+            v_cut = self.v_max(r0)
+
+        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
+
+        df = np.zeros(N_GRID)
+        
+
+        # Calculate sizes of kicks and corresponding weights for integration
+        if n_kick == 1:  # Replace everything by the average if n_kick = 1
+            delta_eps_list = (
+                -2 * v_orb ** 2 * np.log(1 + self.Lambda ** 2) / self.Lambda ** 2,
+            )
+            frac_list = (1,)
+        else:
+            b_list = np.geomspace(self.b_min(v_orb), self.b_max(v_orb), n_kick)
+            delta_eps_list = self.delta_eps_of_b(v_orb, b_list)
+            E0 = np.min(self.eps_grid) + np.min(delta_eps_list)
+            E_grid_new = -np.geomspace(np.abs(E0), 0.1, N_GRID)
+           
+            # Step size for trapezoidal integration
+            step = delta_eps_list[1:] - delta_eps_list[:-1]
+            step = np.append(step, 0)
+            step = np.append(0, step)
+
+            # Make sure that the integral is normalised correctly
+            renorm = np.trapz(self.P_delta_eps(v_orb, delta_eps_list), delta_eps_list)
+            frac_list = 0.5 * (step[:-1] + step[1:]) / renorm
+
+        # Sum over the kicks
+        for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
+            # Value of specific energy before the kick
+            eps_old = E_grid_new - delta_eps
+    
+            # Define which energies are allowed to scatter
+            mask = (eps_old > self.psi(r0) * (1 - b / r0) - 0.5 * v_cut ** 2) & (
+                eps_old < self.psi(r0) * (1 + b / r0)
+            )
+
+            # Sometimes, this mask has no non-zero entries
+            if np.sum(mask) > 0:
+                r_eps = G_N * self.M_BH / eps_old[mask]
+                r_cut = G_N * self.M_BH / (eps_old[mask] + 0.5 * v_cut ** 2)
+
+                # Distribution of particles before they scatter
+                f_old = self.interpolate_DF(eps_old[mask], correction)
+
+                L1 = np.minimum((r0 - r0 ** 2 / r_eps) / b, 0.999999)
+
+                alpha1 = np.arccos(L1)
+                L2 = np.maximum((r0 - r0 ** 2 / r_cut) / b, -0.999999)
+                alpha2 = np.arccos(L2)
+
+                m = (2 * b / r0) / (1 - (r0 / r_eps) + b / r0)
+                mask1 = (m <= 1) & (alpha2 > alpha1)
+                mask2 = (m > 1) & (alpha2 > alpha1)
+
+                N1 = np.zeros(len(m))
+                if np.sum(mask1) > 0:
+                    N1[mask1] = ellipe(m[mask1]) - ellipeinc(
+                        (np.pi - alpha2[mask1]) / 2, m[mask1]
+                    )
+                if np.sum(mask2) > 0:
+                    N1[mask2] = ellipeinc_alt(
+                        (np.pi - alpha1[mask2]) / 2, m[mask2]
+                    )  # - ellipeinc_alt((np.pi - alpha2[mask2])/2, m[mask2])
+
+                df[mask] += (
+                    frac
+                    * f_old
+                    * (1 + b ** 2 / self.b_90(v_orb) ** 2) ** 2
+                    * np.sqrt(1 - r0 / r_eps + b / r0)
+                    * N1
+                )
+
+        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
+        norm = (
+            2
+            * np.sqrt(2 * (self.psi(r0)))
+            * 4
+            * np.pi ** 2
+            * r0
+            * (self.b_90(v_orb) ** 2 / (v_orb) ** 2)
+        )
+        result = norm * df / T_orb
+        
+        return E_grid_new, result
+
     def dEdt_ej(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=np.ones(N_GRID)):
-        """Calculate carried away by particles which are completely unbound.
+        """Calculate energy carried away by particles which are completely unbound.
 
         Parameters:
             - r0 : radial position of the perturbing body [pc]
