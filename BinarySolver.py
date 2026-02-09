@@ -1,11 +1,12 @@
 import numpy as np
-from scipy.integrate import odeint
+from scipy.integrate import odeint, solve_ivp
 from scipy.integrate import ode
 from scipy.special import erf
 from scipy.integrate import quad, dblquad
 from scipy.interpolate import interp1d,interp2d,RectBivariateSpline, griddata
 
 import time
+import sys
 
 import HaloFeedback
 
@@ -18,14 +19,19 @@ from matplotlib import pyplot as plt
 #### fundamental constants ##
 #############################
 
-G_N = 6.67408e-8
-c_light = 2.99792458e10
+kg = 1.
+m = 1.
+s = 1.
 
-s = 1. #s 
+cm = 1e-2*m
 year = 365.25*24.*3600.*s
-km = 1e5
-Msun = 1.98855e33  # kg
-pc = 3.08567758149137e18
+km = 1e3*m
+Msun = 1.98855e30*kg  # kg
+pc = 3.08567758149137e16*m
+
+G_N = 6.67408e-11*(kg*m*s**-2)*m**2*kg**-2
+c_light = 2.99792458e10*(cm/s)
+
 
 #Parse the arguments!                                                       
 parser = argparse.ArgumentParser(description='...')
@@ -38,7 +44,7 @@ parser.add_argument('-system', '--system', help='Type of system to evolve: "vacu
 
 parser.add_argument('-r_i', '--r_i', help='Initial radius in pc', type=float, default = -1)
 parser.add_argument('-short', '--short', help='Set to 1 to finish before r_isco', type=int, default = 0)
-parser.add_argument('-dN_ini', '--dN_ini', help='Initial time-step size in number of orbits', type=float, default = 10.0)
+parser.add_argument('-dN_ini', '--dN_ini', help='Initial time-step size in number of orbits', type=float, default = 1.0)
 parser.add_argument('-dN_max', '--dN_max', help='Maximum time-step size in number of orbits', type=float, default = 250.0)
 
 parser.add_argument('-verbose', '--verbose', type=int, default=1)
@@ -98,13 +104,14 @@ rho_sp = (rho_6*r_6**gamma_sp/(m_tilde**(gamma_sp/3.0)))**(1/(1-gamma_sp/3)) # c
 
 
 #Calculate the initial radius based on projected merger time
-r_grav  = G_N/(c_light**2.) * 2.* M1
+r_grav  = 2 * G_N * M1/(c_light**2.)
 r_isco  = 3 * r_grav
 r_in    = 2 * r_grav
 
+print(r_isco/pc)
 
 if (SHORT):
-    r_end = 80*r_isco
+    r_end = 0.9985*args.r_i*pc
 else:
     r_end = r_isco
 
@@ -121,9 +128,39 @@ def calc_vorb(r):
 
 #Initial values of a few different parameters
 r0_initial = args.r_i*pc
-if (system not in  ["vacuum", "refine"]):
-    dist = HaloFeedback.PowerLawSpike(gamma = gamma_sp, M_BH = M1/Msun, M_NS = M2/Msun, rho_sp = rho_sp/(Msun/pc**3.))
 
+
+print("rho_sp [Msun/pc**3]:", rho_sp/(Msun/pc**3.))
+
+if (system not in  ["vacuum", "refine"]):
+    r_isco2 = 6*G_N*M2/c_light**2
+    #b_min = r_isco2
+    b_min = 1e-3*r0_initial
+    b_90 = (M2/M1)*r0_initial
+    
+    Lambda = np.sqrt((b_max**2 + b_90**2)/(b_min**2 + b_90**2))
+    lnLambda = np.log(Lambda)
+    
+    print("b_max = ", b_max/pc)
+    print("b_90 = ", b_90/pc)
+    print("b_min = ", b_min/pc)
+    dist = HaloFeedback.PowerLawSpike(gamma = gamma_sp, M_BH = M1/Msun, M_NS = M2/Msun, rho_sp = rho_sp/(Msun/pc**3.), Lambda=Lambda)
+else:
+    #Lambda = 0.33*r0*v0**2/(G_N*1.0)
+    #print(Lambda)
+    b_max = 0.3*r0_initial
+    r_isco2 = 6*G_N*M2/c_light**2
+    b_min = r_isco2
+    b_90 = (M2/M1)*r0_initial
+    
+    Lambda = np.sqrt((b_max**2 + b_90**2)/(b_min**2 + b_90**2))
+    #print(Lambda)
+    lnLambda = np.log(Lambda)
+    #lnLambda = np.log(np.sqrt(M1/M2))
+
+#lnLambda = np.log(10)
+
+print("b_min = ", dist.b_min(0))
     
 
 IDstr = "M1_%.4f_M2_%.4f_rho6_%.4f_gamma_%.4f"%(args.M1, args.M2, rho_6/(1e13*Msun/pc**3), gamma_sp) 
@@ -157,24 +194,46 @@ print("> System properties:")
 print(">    M_1, M_2 [M_sun]: ", M1/Msun, M2/Msun)
 print(">    gamma_sp, rho_6 [1e13 M_sun/pc^3]: ", gamma_sp, rho_6/(1e13*Msun/pc**3))
 print(">    r_i [pc]:", r0_initial/pc)
+print(">    r_i [r_isco]:", r0_initial/r_isco)
 print(" ")        
 
 ################################
 ##### Equations of motion ######
 ################################
-    
-    
-def get_density(r):
+
+print("...    ", dist.rho(r0_initial/pc, v_cut=dist.v_max(r0_initial/pc)))
+v_orb = calc_vorb(r_6)/(km/s)
+print("...    ", dist.rho(1e-6, v_cut=v_orb))
+
+
+#-------------------- TESTS ---------------
+#------------------------------------------
+#------------------------------------------
+m_red = M1*M2/(M1 + M2)
+E_orb = G_N*(M1 + M2)*m_red/(2*r0_initial)
+
+print("E_orb:", E_orb/(Msun*(pc/s)**2))
+print("rho_i(r0):", dist.rho(r0_initial/pc))
+print("xi_init:", dist.xi_init)
+print("lnLambda*xi:", lnLambda*dist.xi_init)
+#sys.exit()
+
+def get_density(r, v_cut = -1):
     if (system == "vacuum"):
         rho_xi = 0.0
     elif (system == "static"):
         rho_xi = dist.rho_init(r/pc)*dist.xi_init
     elif (system in ["dynamic", "pbh"]):
         v_orb = calc_vorb(r)
-        rho_xi = dist.rho(r/pc, v_cut=v_orb/(km/s))
+        if (v_cut < 0):
+            rho_xi = dist.rho(r/pc, v_cut=v_orb/(km/s))
+        else:
+            rho_xi = dist.rho(r/pc, v_cut=dist.v_max(r/pc))
+        #print(rho_xi, dist.rho(r/pc, v_cut=dist.v_max(r/pc)))
     elif (system == "refine"):
         rho_xi = rhoeff_interp(r/pc)
     return rho_xi*Msun/pc**3
+
 
 # Radiation reaction
 # See, for example, eq. 226 in https://arxiv.org/pdf/1310.1528.pdf
@@ -184,10 +243,15 @@ def GW_term(t,r):
 
 # Gravitational "friction"
 # See, for example, https://arxiv.org/pdf/1604.02034.pdf
-lnLambda = np.log(np.sqrt(M1/M2))
-DF_prefactor = -(8*np.pi*G_N**0.5*M2*lnLambda/(M**0.5*M1))
+
+
+
+
 def DF_term(t, r):
-    return DF_prefactor*r**2.5*get_density(r)
+    dE_dr = G_N*M1*M2/(2*r**2)
+    v_orb = np.sqrt(G_N*(M1 + M2)/r)
+    dE_dt_DF = -4*np.pi*(G_N*M2)**2*lnLambda*get_density(r)/v_orb
+    return dE_dt_DF/dE_dr
     
 #Derivatives (for feeding into the ODE solver)
 def drdt_ode(t, r):
@@ -196,13 +260,14 @@ def drdt_ode(t, r):
         DF = 0
     else:
         DF = DF_term(t, r)
+    #print(DF/(pc/s))
     #print(DF/GW)
     return GW + DF
     
     
 def save_trajectory():
-    htxt = 'Columns: t [s], r [pc], f_GW [Hz], rho_eff (< v_orb) [Msun/pc^3]'
-    output = list(zip(t_list, r_list/pc, f_list, rho_list/(Msun/pc**3)))
+    htxt = 'Columns: t [s], r [pc], f_GW [Hz], rho_eff (< v_orb) [Msun/pc^3], rho_eff (full) [Msun/pc^3]'
+    output = list(zip(t_list, r_list/pc, f_list, rho_list/(Msun/pc**3), rho_full_list/(Msun/pc**3)))
     fname = output_folder + "trajectory_" + IDstr + ".txt.gz"
     np.savetxt(fname, output, header=htxt,  fmt='%.10e')
     return None
@@ -215,6 +280,7 @@ t_list = np.array([0.])
 r_list = np.array([r0_initial])
 f_list = np.array([f_initial])
 rho_list = np.array([get_density(r0_initial)])
+rho_full_list = np.array([get_density(r0_initial, v_cut = 1)])
 
 start_time = time.time()
 #print("> Evolving system with EFFECTIVE DENSITY PROFILE...")
@@ -234,91 +300,161 @@ OUTPUT_ALL = False
 
 
 dN = 1.0*NPeriods_ini
+dN_min = 1.0
 
+N_orbs = 0.0
 
-#print(r0/pc, r_end/pc)
-while (r0 > r_end):
+if (system == "refine"):
+    #dN = dN_max
+    #t_in = np.linspace(0, _t[-1]*1.01, 10000)
+    #t_in = np.append(0, np.geomspace(1, _t[-1]*1.00009, 1000))
     
-    dt = calc_Torb(r0)*dN
-    #print(calc_Torb(r0))
+    print("> First attempt...")
     
-    dN = np.clip(dN, 0, dN_max)
+    def hit_merger(t, y): 
+        return np.abs(y - r_isco)
+    hit_merger.terminal = True
     
-    v_orb = calc_vorb(r0)
-    #print(v_orb/(km/s))
-    if (system in ["dynamic", "pbh"]):
-        dfdt1 = dist.dfdt(r0/pc, v_orb/(km/s), v_cut=v_orb/(km/s))
-    
+    res = solve_ivp(drdt_ode, (0, _t[-1]*1.01), np.atleast_1d(r0_initial), vectorized=True,
+                 dense_output=True,  rtol=1e-6, max_step = 1e4, events=hit_merger)
     
     
-    if (system in ["dynamic", "pbh"]):
-        excess_list = -(2/3)*dt*dfdt1/(dist.f_eps + 1e-30)
-        excess = np.max(excess_list[1:]) #Omit the DF at isco                       
-                                     
-        if (excess > 1):
-            dN /= excess*1.1
-            if (verbose > 2):
-                print("Too large! New value of dN = ", dN)
-                                                     
-        elif (excess > 1e-1):
-            dN /= 1.1
-            if (verbose > 2):
-                print("Getting large! New value of dN = ", dN)
-                                                                 
-        elif ((excess < 1e-2) and (i%100 == 0) and (i > 0) and (dN < dN_max)):
-            dN *= 1.1
-            if (verbose > 2):
-                print("Increasing! New value of dN = ", dN)
+    
+    
+    t_vals = res.t
+    r_vals = (res.y).flatten()             
+    f_vals = calc_f(r_vals)
+    
+    #idx = np.abs(f_vals - 1e1).argmin()
+    idx = np.abs(f_vals - 1e-1).argmin()
+    
+    print("> Refining...")
+    res = solve_ivp(drdt_ode, (t_vals[idx], _t[-1]*1.01), np.atleast_1d(r_vals[idx]), vectorized=True,
+                 dense_output=True,  rtol=1e-10, max_step = 1, events=hit_merger)
 
+    t_vals_end = res.t
+    r_vals_end = (res.y).flatten()
+    
+    t_full = np.append(t_vals[:idx], t_vals_end)
+    r_full = np.append(r_vals[:idx], r_vals_end)
+    
+    sort_inds = np.argsort(r_full)
+    t_isco = np.interp(r_isco, r_full[sort_inds], t_full[sort_inds])
+    inds = r_full > r_isco
+    t_list = t_full[inds]
+    r_list = r_full[inds]
+    t_list = np.append(t_list, t_isco)
+    r_list = np.append(r_list, r_isco)
+    f_list = calc_f(r_list)
+    rho_list = get_density(r_list)
+    rho_full_list = get_density(r_list, v_cut = 1)
+    
+else:
+    
+    #r_old = r0
+    #print(r0/pc, r_end/pc)
+    while (r0 > r_end) and (N_orbs < 2510):
+
+        if (i > 10000):
+           sys.exit()
+    
+        #if (system == "refine"):
+        #    dr = np.abs((r_old - r0))
+        #    r_remain = np.abs(r0 - r_end)
+        #    #print(dr, r_remain, dr/r_remain)
+        #    if (dr > 5e-6*r_remain):
+        #        dN /= 1.01
+        #    #dN = np.clip(dN, dN_min, )
+            
+        
+        
+        r_old = 1.0*r0
+        dN = np.clip(dN, dN_min, dN_max)
         dt = calc_Torb(r0)*dN
+        #print(calc_Torb(r0))
+        
+        N_orbs += dN
     
-
-    #Use Ralston's Method (RK2) to evolve the system 
-    drdt1 = drdt_ode(t0, r0)
-
-    r0          += (2/3)*dt*drdt1
-    if (system in ["dynamic", "pbh"]):
-        dist.f_eps  += (2/3)*dt*dfdt1
-
-    drdt2 = drdt_ode(t0, r0)
-    
-    if (system in ["dynamic", "pbh"]):
         v_orb = calc_vorb(r0)
-        dfdt2 = dist.dfdt(r0/pc, v_orb/(km/s), v_cut=v_orb/(km/s))
+        #print(v_orb/(km/s))
+        if (system in ["dynamic", "pbh"]):
+            dfdt1 = dist.dfdt(r0/pc, v_orb/(km/s), v_cut=v_orb/(km/s))
+    
+    
+    
+        if (system in ["dynamic", "pbh"]):
+            excess_list = -(2/3)*dt*dfdt1/(dist.f_eps + 1e-30)
+            excess = np.max(excess_list[1:]) #Omit the DF at isco                       
+                                     
+            if (excess > 1):
+                dN /= excess*1.1
+                if (verbose > 2):
+                    print("Too large! New value of dN = ", dN)
+                                                     
+            elif (excess > 1e-1):
+                dN /= 1.1
+                if (verbose > 2):
+                    print("Getting large! New value of dN = ", dN)
+                                                                 
+            elif ((excess < 1e-2) and (i%100 == 0) and (i > 0) and (dN < dN_max)):
+                dN *= 1.1
+                if (verbose > 2):
+                    print("Increasing! New value of dN = ", dN)
 
-    r0          += (dt/12)*(9*drdt2 - 5*drdt1)
-    if (system in ["dynamic", "pbh"]):
-        dist.f_eps  += (dt/12)*(9*dfdt2 - 5*dfdt1)
+            dt = calc_Torb(r0)*dN
     
-    t0 += dt
+
+        #Use Ralston's Method (RK2) to evolve the system 
+        drdt1 = drdt_ode(t0, r0)
+
+        r0          += (2/3)*dt*drdt1
+        if (system in ["dynamic", "pbh"]):
+            dist.f_eps  += (2/3)*dt*dfdt1
+
+        
+        drdt2 = drdt_ode(t0, r0)
     
-    f0 = calc_f(r0)
+        if (system in ["dynamic", "pbh"]):
+            v_orb = calc_vorb(r0)
+            dfdt2 = dist.dfdt(r0/pc, v_orb/(km/s), v_cut=v_orb/(km/s))
+
+        r0          += (dt/12)*(9*drdt2 - 5*drdt1)
+        if (system in ["dynamic", "pbh"]):
+            dist.f_eps  += (dt/12)*(9*dfdt2 - 5*dfdt1)
     
-    t_list = np.append(t_list, t0)
-    r_list = np.append(r_list, r0)
-    f_list = np.append(f_list, f0)
-    rho_list = np.append(rho_list, get_density(r0))
+        t0 += dt
     
-    if (i%1000==0):
-        if (verbose > 1):
-            print(f">    r/r_end = {r0/r_end:.5f}; f_GW [Hz] = {f0:.5f}; t [s] = {t0:.5f}; rho_eff [Msun/pc^3] = {rho_list[-1]/(Msun/pc**3):.4e}")
+        f0 = calc_f(r0)
+    
+        t_list = np.append(t_list, t0)
+        r_list = np.append(r_list, r0)
+        f_list = np.append(f_list, f0)
+        rho_list = np.append(rho_list, get_density(r0))
+        rho_full_list = np.append(rho_full_list, get_density(r0, v_cut = 1))
+
+        
+        #BJK: Revert this later
+        if (i%1000==0):
+            if (verbose > 1):
+                print(f">    r/r_end = {r0/r_end:.4f}; dN = {dN}; f_GW [Hz] = {f0:.5f}; t [s] = {t0:.4e}; rho_eff [Msun/pc^3] = {rho_list[-1]/(Msun/pc**3):.4e}")
  
-        #Update the output file
-        if (verbose > 0):
-            if (OUTPUT): save_trajectory()
+            #Update the output file
+            if (verbose > 0):
+                if (OUTPUT): save_trajectory()
     
-    i = i+1
+        i = i+1
    
   
-#Correct final point to be exactly r_end (rather than < r_end)
-inds = np.argsort(r_list)
-t_last = np.interp(r_end, r_list[inds], t_list[inds])
-f_last = calc_f(r_end)
+    #Correct final point to be exactly r_end (rather than < r_end)
+    inds = np.argsort(r_list)
+    t_last = np.interp(r_end, r_list[inds], t_list[inds])
+    f_last = calc_f(r_end)
 
-t_list[-1] = t_last
-r_list[-1] = r_end
-f_list[-1] = f_last
-rho_list[-1] = get_density(r_end*1.000001)
+    t_list[-1] = t_last
+    r_list[-1] = r_end
+    f_list[-1] = f_last
+    rho_list[-1] = get_density(r_end*1.000001)
+    rho_full_list[-1] = get_density(r_end*1.000001, v_cut = 1)
    
 if (OUTPUT): save_trajectory()
 

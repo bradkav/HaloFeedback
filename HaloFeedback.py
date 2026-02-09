@@ -11,7 +11,15 @@ from scipy.integrate import quad, simps
 from scipy.interpolate import interp1d
 from scipy.special import ellipeinc, ellipkinc, ellipe, ellipk, betainc
 from scipy.special import gamma as Gamma
+from scipy.special import gamma as Gamma_func
 from scipy.special import beta as Beta
+
+try:
+    from tqdm import tqdm
+except:
+    tqdm = lambda x: x
+
+from scipy.special import hyp2f1
 
 # ------------------
 G_N = 4.3021937e-3  # (km/s)^2 pc/M_sun
@@ -34,6 +42,7 @@ def ellipeinc_alt(phi, m):
         beta, 1 / m
     )
 
+r_6 = 1e-6
 
 class DistributionFunction(ABC):
     """
@@ -49,7 +58,7 @@ class DistributionFunction(ABC):
         - IDstr_model: ID string used for file names.
     """
 
-    def __init__(self, M_BH=1e3, M_NS=1.0, Lambda=-1):
+    def __init__(self, M_BH=1e3, M_NS=1.0, Lambda=-1, b_max_fixed = -1):
         self.M_BH = M_BH  # Solar mass
         self.M_NS = M_NS  # Solar mass
 
@@ -58,6 +67,10 @@ class DistributionFunction(ABC):
             self.Lambda = np.sqrt(M_BH / M_NS)
         else:
             self.Lambda = Lambda
+            
+        self.b_max_fixed = b_max_fixed
+        if (b_max_fixed > 0):
+            print("> Warning in DistributionFunction: b_max_fixed has been set - Lambda will be ignored...")
 
         self.r_isco = 6.0 * G_N * M_BH / c ** 2
 
@@ -133,8 +146,9 @@ class DistributionFunction(ABC):
         if v_cut < 0:
             v_cut = self.v_max(r)
 
+        #BJK: Reduced precision of this calculation (number of values in v_list)
         v_cut = np.clip(v_cut, 0, self.v_max(r))
-        vlist = np.sqrt(np.linspace(0, v_cut ** 2, 20000))
+        vlist = np.sqrt(np.linspace(0, v_cut ** 2, 10000))
         flist = np.interp(
             self.psi(r) - 0.5 * vlist ** 2,
             self.eps_grid[::-1],
@@ -172,10 +186,16 @@ class DistributionFunction(ABC):
     def b_min(self, v_orb):
         #return 0.001 / pc_to_km
         #return 15.0 / pc_to_km
-        return 6 * G_N *self.M_NS / c**2 
+        _b_min = 6 * G_N *self.M_NS / c**2 
+        return _b_min
 
     def b_max(self, v_orb):
-        return self.Lambda * np.sqrt(self.b_90(v_orb) ** 2 + self.b_min(v_orb) ** 2)
+        if (self.b_max_fixed > 0):
+            return self.b_max_fixed
+    
+        _b_max = self.Lambda * np.sqrt(self.b_90(v_orb) ** 2 + self.b_min(v_orb) ** 2)
+        #print(_b_max)
+        return _b_max
 
     def eps_min(self, v_orb):
         return 2 * v_orb ** 2 / (1 + self.b_max(v_orb) ** 2 / self.b_90(v_orb) ** 2)
@@ -207,6 +227,73 @@ class DistributionFunction(ABC):
 
         return f_minus + (N_minus/N_plus)*f_plus
 
+    #BJK - 24/07/2023
+    def p_scat_dist(self, dE, eps, r0, v_orb, method="A"):
+
+        v_star = np.sqrt(2*(self.psi(r0) - eps))
+        _b90 = G_N*self.M_NS/v_orb**2
+        
+        DoS = np.sqrt(2) * (np.pi * G_N * self.M_BH) ** 3 * eps ** (-5 / 2.0)
+        
+        integ = 0.0
+        if (method == "A"):
+            def calc_dE(b):
+                return 2*v_orb**2*( 1 + b**2/_b90**2)**-1
+            
+      
+            dE_max = calc_dE(self.b_min(v_orb))
+            dE_min = calc_dE(self.b_max(v_orb))
+            
+            integ = _b90**2*v_orb**2*dE**-2
+            
+        elif (method == "B"):
+            _b90_tilde = G_N*self.M_NS/(v_star**2 + v_orb**2)
+            def calc_dE(b):
+                return 2*v_orb**2*(1 + 2*v_star**2/v_orb**2)*(1 + b**2/_b90_tilde**2)**-1
+            
+            
+            dE_max = calc_dE(self.b_min(v_orb))
+            dE_min = calc_dE(self.b_max(v_orb))
+            
+            integ = _b90_tilde**2*v_orb**2*(1 + 2*v_star**2/v_orb**2)*dE**-2
+        
+        
+        if (dE < dE_min) or (dE > dE_max):
+            return 0
+        else:
+            return (16*np.pi**3*r0*v_star/DoS)*integ
+        
+
+    #BJK - 24/07/2023
+    def p_scat(self, r0, v_orb, method="A"):
+
+        v_star = np.sqrt(2*(self.psi(r0) - self.eps_grid))
+        _b90 = G_N*self.M_NS/v_orb**2
+        
+        
+        integ = 0.0
+        if (method == "A"):
+            def calc_dE(b):
+                return 2*v_orb**2*( 1 + b**2/_b90**2)**-1
+            
+            dE_max = calc_dE(self.b_min(v_orb))
+            dE_min = calc_dE(self.b_max(v_orb))
+            
+            integ = _b90**2*v_orb**2*(dE_min**-1 - dE_max**-1)
+            
+        elif (method == "B"):
+            _b90_tilde = G_N*self.M_NS/(v_star**2 + v_orb**2)
+            def calc_dE(b):
+                return 2*v_orb**2*(1 + 2*v_star**2/v_orb**2)*(1 + b**2/_b90_tilde**2)**-1
+            
+            dE_max = calc_dE(self.b_min(v_orb))
+            dE_min = calc_dE(self.b_max(v_orb))
+            
+            integ = _b90_tilde**2*v_orb**2*(1 + 2*v_star**2/v_orb**2)*(dE_min**-1 - dE_max**-1)
+        
+        return (16*np.pi**3*r0*v_star/self.DoS)*integ
+
+
     def delta_f(self, r0, v_orb, dt, v_cut=-1):
         """Change in f over a time-step dt.
         Automatically prevents f_eps going below zero.
@@ -219,14 +306,58 @@ class DistributionFunction(ABC):
                         defaults to v_max(r) (i.e. all particles)
         """
 
-        f_minus = self.dfdt_minus(r0, v_orb, v_cut, N_KICK) * dt
+        METHOD = "A"
+        
+        if (METHOD == "A"):
+            f_minus = self.dfdt_minus(r0, v_orb, v_cut, N_KICK) * dt
+                
+            correction = np.clip(self.f_eps / (-f_minus + 1e-50), 0, 1)
+            f_minus = np.clip(f_minus, -self.f_eps, 0)
+            f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK, correction) * dt
+
+        #f_minus = self.dfdt_minus(r0, v_orb, v_cut, N_KICK) * dt
+        elif (METHOD == "B"):
+            f_minus = self.dfdt_minus_B(r0, v_orb, N_KICK) * dt
+            correction = np.clip(self.f_eps / (-f_minus + 1e-50), 0, 1)
+            f_minus = np.clip(f_minus, -self.f_eps, 0)
+            f_plus = self.dfdt_plus_B(r0, v_orb, N_KICK, correction) * dt
+        #print(self.eps_min(v_orb))
+        #print(self.eps_max(v_orb))
+
 
         # Don't remove more particles than there are particles...
-        correction = np.clip(self.f_eps / (-f_minus + 1e-50), 0, 1)
+        #correction = np.clip(self.f_eps / (-f_minus + 1e-50), 0, 1)
         
-        f_minus = np.clip(f_minus, -self.f_eps, 0)
-        f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK, correction) * dt
-
+        #f_minus = np.clip(f_minus, -self.f_eps, 0)
+        #f_plus = self.dfdt_plus(r0, v_orb, v_cut, N_KICK, correction) * dt
+        #f_plus = self.dfdt_plus_B(r0, v_orb, N_KICK, correction) * dt
+        #f_plus = 0.0
+        
+        MAKE_PLOT = False
+        
+        if (MAKE_PLOT):
+            #eps2 = np.geomspace(1e6, 1e9, 100)
+            #p2 = 0.0*eps2
+            #for i, eps in tqdm(enumerate(eps2)):
+            #    p2[i] =  self.p_scat(r0, v_orb, eps)
+        
+            T_orb = 2*np.pi*r0*pc_to_km/v_orb
+            dN = (dt/T_orb)
+            #print(dN)
+    
+        
+            plt.figure()
+            #plt.semilogy(self.eps_grid, self.f_eps)
+            plt.semilogy(self.eps_grid, -f_minus/self.f_eps/dN)
+            plt.semilogy(self.eps_grid, f_plus/self.f_eps/dN)
+            #plt.axvline(G_N*self.M_BH/r0, linestyle='--', color='k')
+            for N in [1, 10, 100, 1e3, 1e4]:
+                plt.axvline(G_N*self.M_BH/(N*self.r_isco), linestyle='--', color='k')
+            
+            #plt.semilogy(eps2, p2)
+            plt.axvline(0.25*G_N*self.M_BH/(r0), linestyle='--', color='g')
+            plt.xlim(0, 4.5e8)
+            plt.show()
 
         return f_minus + f_plus
 
@@ -259,6 +390,7 @@ class DistributionFunction(ABC):
         norm = self.b_90(v) ** 2 / (self.b_max(v) ** 2 - self.b_min(v) ** 2)
 
         eps_edges = np.linspace(eps_min, eps_max, n_kick + 1)
+        #print(eps_max)
 
         def F_norm(eps):
             return -norm * 2 * v ** 2 / (eps)
@@ -334,8 +466,9 @@ class DistributionFunction(ABC):
         return f_old
 
     def delta_eps_of_b(self, v_orb, b):
-        b90 = self.b_90(v_orb)
-        return -2 * v_orb ** 2 * (1 + b ** 2 / b90 ** 2) ** -1
+        v_rel = 1.0*v_orb
+        b90 = self.b_90(v_rel)
+        return -2 * v_rel ** 2 * (1 + b ** 2 / b90 ** 2) ** -1
 
     # ---------------------
     # ----- df/dt      ----
@@ -387,7 +520,6 @@ class DistributionFunction(ABC):
             mask1 = (m <= 1) & (alpha2 > alpha1)
             mask2 = (m > 1) & (alpha2 > alpha1)
 
-
             N1 = np.zeros(len(m))
             if np.sum(mask1) > 0:
                 N1[mask1] = ellipe(m[mask1]) - ellipeinc(
@@ -415,6 +547,74 @@ class DistributionFunction(ABC):
         result = norm * df / T_orb / self.DoS
         result[self.eps_grid >= 0.9999*self.psi(self.r_isco)] *= 0
         return result
+    
+    def dE_of_b_B(self, b, r0, v_orb):
+        delta = np.clip(self.psi(r0) - self.eps_grid, 0, 1e30)
+        v_star = np.sqrt(2*delta)
+        
+        b_90_tilde = G_N*self.M_NS/(v_star**2 + v_orb**2)
+        chi = (1 + b**2/b_90_tilde**2)**-1
+        return -2*v_orb**2*(1 + 2*v_star**2/v_orb**2)*chi
+        
+    def dfdt_minus_B(self, r0, v_orb, n_kick=N_KICK):
+        mask = self.eps_grid < self.psi(r0)
+        delta = np.clip(self.psi(r0) - self.eps_grid, 0, 1e30)
+        v_star = np.sqrt(2*delta)
+        
+        b_90_tilde = G_N*self.M_NS/(v_star**2 + v_orb**2)
+    
+        dE_min = self.dE_of_b_B(self.b_max(v_orb), r0, v_orb)
+        dE_max = self.dE_of_b_B(self.b_min(v_orb), r0, v_orb)
+        p_eps = (16*np.pi**3*r0/self.DoS) * b_90_tilde**2*v_orb**2*v_star* \
+                    (1 + 2*v_star**2/v_orb**2)*(dE_min**-1 - dE_max**-1)
+        
+        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
+        
+        df = 0.0*self.f_eps
+        df[mask] = self.f_eps[mask]*p_eps[mask]/T_orb
+        return df
+        
+    def dfdt_plus_B(self, r0, v_orb, n_kick=N_KICK, correction=1):
+        
+        dE_mesh = np.zeros((n_kick, len(self.eps_grid)))
+        dE_min_list = self.dE_of_b_B(self.b_max(v_orb), r0, v_orb)
+        dE_max_list = self.dE_of_b_B(self.b_min(v_orb), r0, v_orb)
+        #Check for appropriate spacing here...
+        dE_mesh = np.geomspace(dE_min_list, dE_max_list, n_kick)
+        
+        eps_mesh = np.tile(self.eps_grid, (n_kick, 1))
+        
+        eps_old = eps_mesh - dE_mesh
+        
+        f_inter = interp1d(self.eps_grid, self.f_eps*correction, bounds_error=False, fill_value = 0.0)
+        f_old = f_inter(eps_old)
+        
+        mask = eps_old < self.psi(r0)
+        #np.where(mask, X, 0)
+        #-------------------
+        
+        delta = np.clip(self.psi(r0) - eps_old, 0, 1e30)
+        v_star = np.sqrt(2*delta)
+        
+        b_90_tilde = G_N*self.M_NS/(v_star**2 + v_orb**2)
+    
+        P_eps = (16*np.pi**3*r0/self.DoS) * b_90_tilde**2*v_orb**2*v_star* \
+                    (1 + 2*v_star**2/v_orb**2)*dE_mesh**-2
+        
+        T_orb = (2 * np.pi * r0 * pc_to_km) / v_orb
+        
+        #DoS_corr = (self.eps_grid/eps_old)**(5/2)
+        DoS_corr = 1.0
+        
+        #df = 0.0*self.f_eps
+        #df[mask] = self.f_eps[mask]*p_eps[mask]/T_orb
+        df = -np.trapz(mask*P_eps*f_old*DoS_corr, dE_mesh, axis=0)/T_orb
+        #print(df)
+        return df
+        
+        
+        
+        
 
     def dfdt_plus(self, r0, v_orb, v_cut=-1, n_kick=N_KICK, correction=1):
         """Particles to add back into distribution function from E - dE -> E."""
@@ -448,7 +648,7 @@ class DistributionFunction(ABC):
         for delta_eps, b, frac in zip(delta_eps_list, b_list, frac_list):
             # Value of specific energy before the kick
             eps_old = self.eps_grid - delta_eps
-
+  
             # Define which energies are allowed to scatter
             mask = (eps_old > self.psi(r0) * (1 - b / r0) - 0.5 * v_cut ** 2) & (
                 eps_old < self.psi(r0) * (1 + b / r0)
@@ -459,13 +659,16 @@ class DistributionFunction(ABC):
                 r_eps = G_N * self.M_BH / eps_old[mask]
                 r_cut = G_N * self.M_BH / (eps_old[mask] + 0.5 * v_cut ** 2)
 
+                eps0 = G_N*self.M_BH/r0
+
                 # Distribution of particles before they scatter
                 f_old = self.interpolate_DF(eps_old[mask], correction)
 
                 L1 = np.minimum((r0 - r0 ** 2 / r_eps) / b, 0.999999)
-
                 alpha1 = np.arccos(L1)
+                
                 L2 = np.maximum((r0 - r0 ** 2 / r_cut) / b, -0.999999)
+         
                 alpha2 = np.arccos(L2)
 
                 m = (2 * b / r0) / (1 - (r0 / r_eps) + b / r0)
@@ -702,7 +905,7 @@ class PowerLawSpike(DistributionFunction):
     if rho_sp or gamma are changed after initialization.
     """
 
-    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7 / 3, rho_sp=226, Lambda=-1):
+    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7 / 3, rho_sp=226, Lambda=-1, b_max_fixed=-1):
         if gamma <= 1:
             raise ValueError("gamma must be greater than 1")
         self.M_BH = M_BH  # Solar mass
@@ -722,7 +925,7 @@ class PowerLawSpike(DistributionFunction):
 
         self.xi_init = 1 - betainc(gamma - 1 / 2, 3 / 2, 1 / 2)
 
-        super().__init__(M_BH, M_NS, Lambda)
+        super().__init__(M_BH, M_NS, Lambda, b_max_fixed)
 
     def f_init(self, eps):
         A1 = self.r_sp / (G_N * self.M_BH)
@@ -761,7 +964,7 @@ class PlateauSpike(DistributionFunction):
     if rho_sp or gamma are changed after initialization.
     """
 
-    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7 / 3, rho_sp=226, r_p=0.0, Lambda=-1):
+    def __init__(self, M_BH=1e3, M_NS=1.0, gamma=7 / 3, rho_sp=226, r_p=0.0, Lambda=-1, b_max_fixed=-1):
         self.M_BH = M_BH  # Solar mass
         self.M_NS = M_NS  # Solar mass
         self.gamma = gamma  # Slope of DM density profile
@@ -784,7 +987,7 @@ class PlateauSpike(DistributionFunction):
         self.r_p = r_p
         self.IDstr_model = f"gamma={gamma:.2f}_rhosp={rho_sp:.1f}_rp={r_p:.2E}"
 
-        super().__init__(M_BH, M_NS, Lambda)
+        super().__init__(M_BH, M_NS, Lambda, b_max_fixed)
 
     def f_init(self, eps):
         def f_init(eps):
@@ -819,3 +1022,66 @@ class PlateauSpike(DistributionFunction):
                 )
 
         return np.vectorize(rho_init)(r)
+        
+        
+class GeneralizedNFWSpike(DistributionFunction):
+    """
+    
+    """
+
+    def __init__(self, M_BH=1e3, M_NS=1.0, rho_6=1e16, gamma_sp=7/3, r_t=1e-8, alpha=2, Lambda=-1, b_max_fixed=-1):
+        
+        self.M_BH   = M_BH
+        self.M_NS   = M_NS
+        self.rho_6  = rho_6
+        self.r_t    = r_t
+        self.gamma_sp = gamma_sp
+        self.alpha  = alpha
+        
+        _k = (3 - gamma_sp)*0.2**(3-gamma_sp)/(2*np.pi)
+        self.rho_sp = ((rho_6*r_6**gamma_sp)*((_k*M_BH)**(-gamma_sp/3)))**(1/(1-gamma_sp/3))
+        self.r_sp = (
+            (3 - self.gamma_sp)
+            * (0.2 ** (3.0 - self.gamma_sp))
+            * self.M_BH
+            / (2 * np.pi * self.rho_sp)
+        ) ** (
+            1.0 / 3.0
+        )  # pc
+        
+        self.r_isco = 6.0 * G_N * M_BH / c ** 2
+        
+        #Strictly speaking, r_min should be 2*r_isco (https://arxiv.org/abs/1305.2619)
+        self.r_min  = self.r_isco
+        
+        super().__init__(M_BH, M_NS, Lambda, b_max_fixed)
+    
+    def f_init(self, E):
+        A1 = r_6 / (G_N * self.M_BH)
+        psi_t =  (G_N * self.M_BH)/self.r_t
+        alpha = self.alpha
+        gamma = self.gamma_sp
+        
+        AB_pre = 4*(gamma - 1)/(4*alpha**2 + 8*alpha*gamma + 4*gamma**2 - 1)
+        A = psi_t*(2*alpha + 2*gamma + 1)*hyp2f1(alpha+2, alpha + gamma, alpha+gamma + 1/2, -E/psi_t)
+        B = gamma*E*hyp2f1(alpha + 2, alpha + gamma + 1, alpha + gamma + 3/2, -E/psi_t)
+        C = (psi_t**2/E)*hyp2f1(alpha + 2, alpha + gamma - 1, alpha + gamma - 1/2, -E/psi_t) 
+        return (
+            self.rho_6 * (2*np.pi) ** -1.5 * (psi_t**(-alpha-2)) *(A1 ** gamma)
+            * (Gamma_func(alpha + gamma + 1) / Gamma_func(alpha + gamma - 1/2))
+            * E ** (alpha + gamma - 1/2)
+            * (AB_pre*(A + B) + C)
+        )
+        
+    def rho_init(self, r):
+        return self.rho_6*(r/r_6)**(-self.gamma_sp)*(1 + r/self.r_t)**-self.alpha
+        
+    def M_DM_ini(self, r):
+        x = r/r_6
+        H = hyp2f1(self.alpha, 3 - self.gamma_sp, 4 - self.gamma_sp, -r/self.r_t)
+        return (4*np.pi*r_6**3*self.rho_6/(3 - self.gamma_sp))*x**(3 - self.gamma_sp)*H
+
+        
+
+        
+
